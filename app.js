@@ -68,6 +68,30 @@ const baseData = {
     { name: "Taqtic", category: "Costi personali Fabio", project: "Metrics", type: "Personale", frequency: "Mensile", amount: 20, impacts: "No", notes: "Solo informativo" },
     { name: "LinkedIn Premium / Sales Navigator", category: "Costi personali Fabio", project: "Metrics", type: "Personale", frequency: "Mensile", amount: 90, impacts: "No", notes: "Solo informativo" },
   ],
+  creatives: [
+    {
+      client: "Startupdata",
+      owner: "Frego",
+      months: 4,
+      monthlyGraphicsTarget: 8,
+      graphicsDone: 0,
+      adsCreativesDone: 3,
+      minutesPerGraphic: 45,
+      minutesPerAdCreative: 60,
+      notes: "Operativita grafica attuale: 8 contenuti mensili per 4 mesi. Creativita ads fatte finora: 3.",
+    },
+    {
+      client: "Mirko / Evolution",
+      owner: "Frego",
+      months: 4,
+      monthlyGraphicsTarget: 8,
+      graphicsDone: 0,
+      adsCreativesDone: 0,
+      minutesPerGraphic: 45,
+      minutesPerAdCreative: 60,
+      notes: "Default per clienti con operativita grafica simile.",
+    },
+  ],
   sales: [
     { period: "2026-06", proposals: 0, closed: 0, salesHours: 5, otherCosts: 0, firstContract: 0 },
     { period: "2026-07", proposals: 0, closed: 0, salesHours: 0, otherCosts: 0, firstContract: 0 },
@@ -100,6 +124,8 @@ const els = {
   activityTotal: document.querySelector("#activityTotal"),
   costRows: document.querySelector("#costRows"),
   costTotal: document.querySelector("#costTotal"),
+  creativeRows: document.querySelector("#creativeRows"),
+  creativeTotal: document.querySelector("#creativeTotal"),
   salesRows: document.querySelector("#salesRows"),
   salesTotal: document.querySelector("#salesTotal"),
   renewalRows: document.querySelector("#renewalRows"),
@@ -167,6 +193,7 @@ async function loadRemoteState() {
 
   if (data?.data) {
     state = { ...structuredClone(baseData), ...data.data };
+    normalizeState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     remoteStore.loaded = true;
     setSaveMarker("Database online");
@@ -231,6 +258,26 @@ function hoursFor(activity) {
   return ((Number(activity.minutes) || 0) * (Number(activity.times) || 0)) / 60;
 }
 
+function creativeHoursFor(plan) {
+  const graphicHours = ((Number(plan.monthlyGraphicsTarget) || 0) * (Number(plan.minutesPerGraphic) || 0)) / 60;
+  const adsHours = ((Number(plan.adsCreativesDone) || 0) * (Number(plan.minutesPerAdCreative) || 0)) / Math.max(1, Number(plan.months) || 1) / 60;
+  return graphicHours + adsHours;
+}
+
+function creativePlanTotal(plan) {
+  return (Number(plan.months) || 0) * (Number(plan.monthlyGraphicsTarget) || 0);
+}
+
+function personMonthlyHours(person) {
+  const activityHours = state.activities
+    .filter((item) => item.owner === person)
+    .reduce((sum, item) => sum + hoursFor(item), 0);
+  const creativeHours = (state.creatives || [])
+    .filter((item) => item.owner === person)
+    .reduce((sum, item) => sum + creativeHoursFor(item), 0);
+  return activityHours + creativeHours;
+}
+
 function rateFor(person) {
   const key = `${String(person).toLowerCase()}Rate`;
   return Number(state.settings[key]) || 0;
@@ -247,8 +294,12 @@ function clientEconomics(client) {
     .filter((cost) => cost.project === client.name && cost.impacts === "Si")
     .reduce((sum, cost) => sum + monthlyAmount(cost), 0);
   const activities = state.activities.filter((item) => item.client === client.name);
-  const hours = activities.reduce((sum, item) => sum + hoursFor(item), 0);
-  const laborValue = activities.reduce((sum, item) => sum + hoursFor(item) * rateFor(item.owner), 0);
+  const creativePlans = (state.creatives || []).filter((item) => item.client === client.name);
+  const activityHours = activities.reduce((sum, item) => sum + hoursFor(item), 0);
+  const creativeHours = creativePlans.reduce((sum, item) => sum + creativeHoursFor(item), 0);
+  const hours = activityHours + creativeHours;
+  const laborValue = activities.reduce((sum, item) => sum + hoursFor(item) * rateFor(item.owner), 0)
+    + creativePlans.reduce((sum, item) => sum + creativeHoursFor(item) * rateFor(item.owner), 0);
   const margin = revenue - directCosts;
   const marginPct = revenue > 0 ? margin / revenue : 0;
   const target = Number(state.settings.targetMargin) / 100;
@@ -270,6 +321,7 @@ function allEconomics() {
 }
 
 function render() {
+  normalizeState();
   saveState();
   syncOptions();
   const rows = allEconomics();
@@ -278,10 +330,21 @@ function render() {
   renderPeople();
   renderSettings();
   renderActivities();
+  renderCreatives();
   renderCosts();
   renderSales();
   renderRenewals(rows);
   showSavedState();
+}
+
+function normalizeState() {
+  state.creatives = Array.isArray(state.creatives) ? state.creatives : structuredClone(baseData.creatives);
+  state.people = Array.isArray(state.people) ? state.people : structuredClone(baseData.people);
+  state.clients = Array.isArray(state.clients) ? state.clients : [];
+  state.activities = Array.isArray(state.activities) ? state.activities : [];
+  state.costs = Array.isArray(state.costs) ? state.costs : [];
+  state.sales = Array.isArray(state.sales) ? state.sales : [];
+  state.settings = { ...structuredClone(baseData.settings), ...(state.settings || {}) };
 }
 
 function renderKpis(rows) {
@@ -290,7 +353,7 @@ function renderKpis(rows) {
   const directCosts = active.reduce((sum, row) => sum + row.directCosts, 0);
   const margin = active.reduce((sum, row) => sum + row.margin, 0);
   const hours = active.reduce((sum, row) => sum + row.hours, 0);
-  const fabioHours = state.activities.filter((item) => item.owner === "Fabio").reduce((sum, item) => sum + hoursFor(item), 0);
+  const fabioHours = personMonthlyHours("Fabio");
   const splitGross = Math.max(0, margin / 2);
   const netFabio = splitGross * Number(state.settings.taxCoefficient) * (1 - Number(state.settings.inpsRate) / 100);
   const kpis = [
@@ -349,7 +412,7 @@ function clientEditRow(row, index) {
 
 function renderPeople() {
   const html = state.people.map((person) => {
-    const hours = state.activities.filter((item) => item.owner === person).reduce((sum, item) => sum + hoursFor(item), 0);
+    const hours = personMonthlyHours(person);
     const capacity = capacityFor(person);
     const load = capacity ? hours / capacity : 0;
     const width = Math.min(load * 100, 130);
@@ -424,6 +487,34 @@ function delegationKind(label) {
   if (label === "Delegabile subito") return "good";
   if (label === "Delegabile con procedura") return "warn";
   return "info";
+}
+
+function renderCreatives() {
+  const plans = state.creatives || [];
+  const totalHours = plans.reduce((sum, item) => sum + creativeHoursFor(item), 0);
+  const totalGraphics = plans.reduce((sum, item) => sum + creativePlanTotal(item), 0);
+  els.creativeTotal.textContent = `${decimal.format(totalHours)} h/mese, ${totalGraphics} grafiche pianificate`;
+  els.creativeRows.innerHTML = plans.map((plan, index) => {
+    const monthlyHours = creativeHoursFor(plan);
+    const totalPlan = creativePlanTotal(plan);
+    return `
+      <tr>
+        <td>${selectHtml("creatives", index, "client", state.clients.map((client) => client.name), plan.client)}</td>
+        <td>${selectHtml("creatives", index, "owner", state.people, plan.owner)}</td>
+        <td><input class="cell-input number-input" type="number" min="1" step="1" data-scope="creatives" data-index="${index}" data-field="months" value="${Number(plan.months) || 1}" /></td>
+        <td><input class="cell-input number-input" type="number" min="0" step="1" data-scope="creatives" data-index="${index}" data-field="monthlyGraphicsTarget" value="${Number(plan.monthlyGraphicsTarget) || 0}" /></td>
+        <td>${totalPlan}</td>
+        <td><input class="cell-input number-input" type="number" min="0" step="1" data-scope="creatives" data-index="${index}" data-field="graphicsDone" value="${Number(plan.graphicsDone) || 0}" /></td>
+        <td><input class="cell-input number-input" type="number" min="0" step="1" data-scope="creatives" data-index="${index}" data-field="adsCreativesDone" value="${Number(plan.adsCreativesDone) || 0}" /></td>
+        <td><input class="cell-input number-input" type="number" min="0" step="5" data-scope="creatives" data-index="${index}" data-field="minutesPerGraphic" value="${Number(plan.minutesPerGraphic) || 0}" /></td>
+        <td><input class="cell-input number-input" type="number" min="0" step="5" data-scope="creatives" data-index="${index}" data-field="minutesPerAdCreative" value="${Number(plan.minutesPerAdCreative) || 0}" /></td>
+        <td>${decimal.format(monthlyHours)}</td>
+        <td>${euro.format(monthlyHours * rateFor(plan.owner))}</td>
+        <td><input class="cell-input note-input" data-scope="creatives" data-index="${index}" data-field="notes" value="${escapeAttr(plan.notes)}" /></td>
+        <td><button class="icon-btn danger" data-action="delete" data-scope="creatives" data-index="${index}" title="Elimina operativita">x</button></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderCosts() {
@@ -513,6 +604,8 @@ function syncOptions() {
   els.targetMargin.value = state.settings.targetMargin;
   setOptions(document.querySelector('form#activityForm select[name="client"]'), state.clients.map((client) => client.name));
   setOptions(document.querySelector('form#costForm select[name="project"]'), [...state.clients.map((client) => client.name), "Metrics", "Acquisizione Metrics"]);
+  setOptions(document.querySelector('form#creativeForm select[name="client"]'), state.clients.map((client) => client.name));
+  setOptions(document.querySelector('form#creativeForm select[name="owner"]'), state.people);
   setOptions(document.querySelector('form#activityForm select[name="owner"]'), state.people);
   setOptions(document.querySelector('form#activityForm select[name="idealOwner"]'), state.people);
   setOptions(document.querySelector('form#activityForm select[name="delegation"]'), state.delegations);
@@ -584,6 +677,12 @@ function commitCellEdit(target, shouldRender = true) {
     "times",
     "manualHours",
     "amount",
+    "months",
+    "monthlyGraphicsTarget",
+    "graphicsDone",
+    "adsCreativesDone",
+    "minutesPerGraphic",
+    "minutesPerAdCreative",
     "proposals",
     "closed",
     "salesHours",
@@ -600,6 +699,9 @@ function commitCellEdit(target, shouldRender = true) {
     });
     state.costs.forEach((cost) => {
       if (cost.project === previousName) cost.project = nextValue;
+    });
+    (state.creatives || []).forEach((plan) => {
+      if (plan.client === previousName) plan.client = nextValue;
     });
   }
 
@@ -618,6 +720,7 @@ function deleteRow(scope, index) {
     const clientName = collection[index].name;
     state.activities = state.activities.filter((activity) => activity.client !== clientName);
     state.costs = state.costs.filter((cost) => cost.project !== clientName);
+    state.creatives = (state.creatives || []).filter((plan) => plan.client !== clientName);
   }
   collection.splice(index, 1);
   render();
@@ -675,6 +778,21 @@ handleForm("#costForm", (data) => {
     frequency: data.frequency,
     amount: Number(data.amount) || 0,
     impacts: data.impacts,
+    notes: data.notes,
+  });
+});
+
+handleForm("#creativeForm", (data) => {
+  state.creatives = state.creatives || [];
+  state.creatives.push({
+    client: data.client,
+    owner: data.owner,
+    months: Number(data.months) || 1,
+    monthlyGraphicsTarget: Number(data.monthlyGraphicsTarget) || 0,
+    graphicsDone: Number(data.graphicsDone) || 0,
+    adsCreativesDone: Number(data.adsCreativesDone) || 0,
+    minutesPerGraphic: Number(data.minutesPerGraphic) || 0,
+    minutesPerAdCreative: Number(data.minutesPerAdCreative) || 0,
     notes: data.notes,
   });
 });

@@ -19,6 +19,7 @@
         <button class="tab is-active" data-view="dashboard" title="Dashboard">Dashboard</button>
         <button class="tab" data-view="clients" title="Clienti">Clienti</button>
         <button class="tab" data-view="activities" title="Attivita e tempi">Attivita</button>
+        <button class="tab" data-view="creatives" title="Creativita grafiche e ads">Creativita</button>
         <button class="tab" data-view="costs" title="Costi e tool">Costi</button>
         <button class="tab" data-view="sales" title="Acquisizione">Acquisizione</button>
         <button class="tab" data-view="renewals" title="Rinnovi">Rinnovi</button>
@@ -190,6 +191,59 @@
                   </tr>
                 </thead>
                 <tbody id="activityRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="creatives" class="view">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nuova operativita grafica</h2>
+            </div>
+            <form id="creativeForm" class="form-grid">
+              <label>Cliente<select name="client"></select></label>
+              <label>Responsabile<select name="owner"></select></label>
+              <label>Mesi operativita<input name="months" type="number" min="1" step="1" value="4" /></label>
+              <label>Contenuti grafici/mese<input name="monthlyGraphicsTarget" type="number" min="0" step="1" value="8" /></label>
+              <label>Contenuti gia fatti<input name="graphicsDone" type="number" min="0" step="1" value="0" /></label>
+              <label>Creativita ads fatte<input name="adsCreativesDone" type="number" min="0" step="1" value="0" /></label>
+              <label>Minuti per contenuto<input name="minutesPerGraphic" type="number" min="0" step="5" value="45" /></label>
+              <label>Minuti per creativita ads<input name="minutesPerAdCreative" type="number" min="0" step="5" value="60" /></label>
+              <label>Note<input name="notes" /></label>
+              <button class="primary" type="submit">Aggiungi operativita</button>
+            </form>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <div>
+                <h2>Creativita grafiche e ads</h2>
+                <span class="muted">Piano mensile, avanzamento e ore stimate sul responsabile</span>
+              </div>
+              <span id="creativeTotal" class="muted"></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Resp.</th>
+                    <th>Mesi</th>
+                    <th>Grafiche/mese</th>
+                    <th>Totale piano</th>
+                    <th>Grafiche fatte</th>
+                    <th>Ads fatte</th>
+                    <th>Min/grafica</th>
+                    <th>Min/ads</th>
+                    <th>Ore/mese</th>
+                    <th>Costo/mese</th>
+                    <th>Note</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="creativeRows"></tbody>
               </table>
             </div>
           </section>
