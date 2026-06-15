@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Metrics gestione</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">M</span>
+        <div>
+          <strong>Metrics</strong>
+          <small>Gestione margini</small>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="Sezioni">
+        <button class="tab is-active" data-view="dashboard" title="Dashboard">Dashboard</button>
+        <button class="tab" data-view="clients" title="Clienti">Clienti</button>
+        <button class="tab" data-view="activities" title="Attivita e tempi">Attivita</button>
+        <button class="tab" data-view="costs" title="Costi e tool">Costi</button>
+        <button class="tab" data-view="sales" title="Acquisizione">Acquisizione</button>
+        <button class="tab" data-view="renewals" title="Rinnovi">Rinnovi</button>
+      </nav>
+      <div class="sidebar-actions">
+        <button id="exportJson" class="ghost">Esporta JSON</button>
+        <button id="resetData" class="ghost danger">Reset demo</button>
+      </div>
+    </aside>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Dal foglio Excel a uno strumento operativo</p>
+          <h1 id="viewTitle">Dashboard</h1>
+          <span id="saveMarker" class="save-marker">Modifica attiva</span>
+        </div>
+        <div class="period-control">
+          <label for="targetMargin">Margine target</label>
+          <input id="targetMargin" type="number" min="0" max="95" step="1" />
+          <span>%</span>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view is-active">
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="workspace-grid">
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>Sostenibilita per cliente</h2>
+              <span id="clientCount" class="muted"></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Ricavi</th>
+                    <th>Costi diretti</th>
+                    <th>Ore</th>
+                    <th>Margine</th>
+                    <th>Prezzo minimo</th>
+                    <th>Alert</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardClientRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Carico persone</h2>
+            </div>
+            <div id="peopleLoad" class="load-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Impostazioni manuali</h2>
+            </div>
+            <div id="settingsPanel" class="settings-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="clients" class="view">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nuovo cliente</h2>
+            </div>
+            <form id="clientForm" class="form-grid">
+              <label>Nome<input name="name" required /></label>
+              <label>Stato
+                <select name="status">
+                  <option>Attivo</option>
+                  <option>In trattativa</option>
+                  <option>In pausa</option>
+                  <option>Lead Metrics</option>
+                </select>
+              </label>
+              <label>Tipo<input name="type" value="Standard" /></label>
+              <label>Servizio<input name="service" /></label>
+              <label>Canone mensile<input name="monthlyFee" type="number" min="0" step="50" value="0" /></label>
+              <label>Budget ads separato<input name="adsBudget" type="number" min="0" step="50" value="0" /></label>
+              <label>Extra mensili<input name="monthlyExtra" type="number" min="0" step="50" value="0" /></label>
+              <label>Note strategiche<input name="reason" /></label>
+              <button class="primary" type="submit">Aggiungi cliente</button>
+            </form>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>Portafoglio clienti</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Stato</th>
+                    <th>Servizio</th>
+                    <th>Canone</th>
+                    <th>Extra</th>
+                    <th>Ore</th>
+                    <th>Margine</th>
+                    <th>Alert</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="clientRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="activities" class="view">
+        <div class="filterbar">
+          <label>Cerca<input id="activitySearch" placeholder="Cliente, attivita, responsabile" /></label>
+          <label>Responsabile<select id="ownerFilter"></select></label>
+          <label>Delegabilita<select id="delegationFilter"></select></label>
+        </div>
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nuova attivita</h2>
+            </div>
+            <form id="activityForm" class="form-grid">
+              <label>Cliente<select name="client"></select></label>
+              <label>Fase<input name="phase" value="Delivery mensile" /></label>
+              <label>Tipo<input name="type" value="LinkedIn" /></label>
+              <label>Attivita<input name="task" required /></label>
+              <label>Responsabile<select name="owner"></select></label>
+              <label>Responsabile ideale<select name="idealOwner"></select></label>
+              <label>Priorita
+                <select name="priority"><option>Alta</option><option>Media</option><option>Bassa</option></select>
+              </label>
+              <label>Delegabilita<select name="delegation"></select></label>
+              <label>Inclusa nel canone?
+                <select name="included"><option>Si</option><option>No, extra</option><option>Da valutare</option></select>
+              </label>
+              <label>Frequenza<select name="frequency"></select></label>
+              <label>Minuti<input name="minutes" type="number" min="0" step="5" value="30" /></label>
+              <label>Volte/mese<input name="times" type="number" min="0" step="1" value="4" /></label>
+              <button class="primary" type="submit">Aggiungi attivita</button>
+            </form>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>Registro tempi</h2>
+              <span id="activityTotal" class="muted"></span>
+            </div>
+            <div class="table-wrap tall">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Attivita</th>
+                    <th>Resp.</th>
+                    <th>Ideale</th>
+                    <th>Delegabilita</th>
+                    <th>Min.</th>
+                    <th>Volte</th>
+                    <th>Ore manuali</th>
+                    <th>Ore/mese</th>
+                    <th>Costo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="activityRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="costs" class="view">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nuovo costo</h2>
+            </div>
+            <form id="costForm" class="form-grid">
+              <label>Voce<input name="name" required /></label>
+              <label>Categoria<input name="category" value="Tool cliente" /></label>
+              <label>Cliente<select name="project"></select></label>
+              <label>Tipo costo<input name="type" value="Dedicato" /></label>
+              <label>Frequenza<select name="frequency"><option>Mensile</option><option>Annuale</option><option>Lifetime</option><option>Variabile</option></select></label>
+              <label>Importo<input name="amount" type="number" min="0" step="1" value="0" /></label>
+              <label>Incide sul margine?<select name="impacts"><option>Si</option><option>No</option></select></label>
+              <label>Note<input name="notes" /></label>
+              <button class="primary" type="submit">Aggiungi costo</button>
+            </form>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <div>
+                <h2>Costi e tool</h2>
+                <span class="muted">Modifica direttamente i campi nella tabella</span>
+              </div>
+              <span id="costTotal" class="muted"></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Voce</th>
+                    <th>Categoria</th>
+                    <th>Cliente</th>
+                    <th>Tipo</th>
+                    <th>Frequenza</th>
+                    <th>Importo</th>
+                    <th>Mensilizzato</th>
+                    <th>Margine</th>
+                    <th>Note</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="costRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="sales" class="view">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Acquisizione</h2>
+            </div>
+            <form id="salesForm" class="form-grid">
+              <label>Periodo<input name="period" type="month" value="2026-06" /></label>
+              <label>Proposte<input name="proposals" type="number" min="0" value="0" /></label>
+              <label>Clienti chiusi<input name="closed" type="number" min="0" value="0" /></label>
+              <label>Ore vendita Fabio<input name="salesHours" type="number" min="0" step="0.5" value="0" /></label>
+              <label>Altri costi<input name="otherCosts" type="number" min="0" step="10" value="0" /></label>
+              <label>Valore primo contratto<input name="firstContract" type="number" min="0" step="50" value="0" /></label>
+              <button class="primary" type="submit">Aggiungi periodo</button>
+            </form>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <h2>Pipeline economica</h2>
+              <span id="salesTotal" class="muted"></span>
+            </div>
+            <div id="salesRows" class="timeline"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="renewals" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Rinnovi e rinegoziazione</h2>
+            <span class="muted">Prezzi minimi aggiornati dai dati operativi</span>
+          </div>
+          <div id="renewalRows" class="renewal-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
