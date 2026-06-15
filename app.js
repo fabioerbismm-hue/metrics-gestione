@@ -1,4 +1,6 @@
 const STORAGE_KEY = "metrics-gestione-v6";
+const REMOTE_STATE_ID = "main";
+const REMOTE_TABLE = "metrics_app_state";
 
 const baseData = {
   settings: {
@@ -73,7 +75,13 @@ const baseData = {
   ],
 };
 
-let state = loadState();
+let state = structuredClone(baseData);
+let remoteStore = {
+  client: null,
+  enabled: false,
+  loaded: false,
+  saveTimer: null,
+};
 
 const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
@@ -118,7 +126,7 @@ function activityFromRow(row) {
   };
 }
 
-function loadState() {
+function loadLocalState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return structuredClone(baseData);
   try {
@@ -131,15 +139,84 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  queueRemoteSave();
+}
+
+function setupRemoteStore() {
+  const config = window.METRICS_CONFIG || {};
+  if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) return;
+
+  remoteStore.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  remoteStore.enabled = true;
+}
+
+async function loadRemoteState() {
+  if (!remoteStore.enabled) return false;
+
+  const { data, error } = await remoteStore.client
+    .from(REMOTE_TABLE)
+    .select("data")
+    .eq("id", REMOTE_STATE_ID)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Remote load failed", error);
+    setSaveMarker("Database non raggiungibile");
+    return false;
+  }
+
+  if (data?.data) {
+    state = { ...structuredClone(baseData), ...data.data };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    remoteStore.loaded = true;
+    setSaveMarker("Database online");
+    return true;
+  }
+
+  await saveRemoteStateNow();
+  remoteStore.loaded = true;
+  setSaveMarker("Database inizializzato");
+  return true;
+}
+
+function queueRemoteSave() {
+  if (!remoteStore.enabled) return;
+  window.clearTimeout(remoteStore.saveTimer);
+  remoteStore.saveTimer = window.setTimeout(() => {
+    saveRemoteStateNow();
+  }, 650);
+}
+
+async function saveRemoteStateNow() {
+  if (!remoteStore.enabled) return;
+  const { error } = await remoteStore.client
+    .from(REMOTE_TABLE)
+    .upsert({
+      id: REMOTE_STATE_ID,
+      data: state,
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    console.warn("Remote save failed", error);
+    setSaveMarker("Errore salvataggio online");
+    return;
+  }
+
+  setSaveMarker("Salvato online");
 }
 
 function showSavedState() {
+  setSaveMarker(remoteStore.enabled ? "Salvataggio..." : "Salvato in locale", true);
+}
+
+function setSaveMarker(text, pulse = false) {
   const marker = document.querySelector("#saveMarker");
   if (!marker) return;
-  marker.textContent = "Salvato";
-  marker.classList.add("is-saved");
+  marker.textContent = text;
+  if (pulse) marker.classList.add("is-saved");
   window.clearTimeout(showSavedState.timer);
-  showSavedState.timer = window.setTimeout(() => marker.classList.remove("is-saved"), 900);
+  showSavedState.timer = window.setTimeout(() => marker.classList.remove("is-saved"), 1100);
 }
 
 function monthlyAmount(cost) {
@@ -679,4 +756,17 @@ function escapeAttr(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
-render();
+async function bootApp() {
+  state = loadLocalState();
+  setupRemoteStore();
+
+  if (remoteStore.enabled) {
+    await loadRemoteState();
+  } else {
+    setSaveMarker("Locale: configura Supabase");
+  }
+
+  render();
+}
+
+bootApp();
