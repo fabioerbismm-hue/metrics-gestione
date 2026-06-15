@@ -1,6 +1,7 @@
 const STORAGE_KEY = "metrics-gestione-v6";
 const REMOTE_STATE_ID = "main";
 const REMOTE_TABLE = "metrics_app_state";
+const AUDIT_TABLE = "metrics_audit_log";
 
 const baseData = {
   settings: {
@@ -105,6 +106,8 @@ let remoteStore = {
   enabled: false,
   loaded: false,
   saveTimer: null,
+  user: null,
+  audit: [],
 };
 
 const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -126,6 +129,11 @@ const els = {
   costTotal: document.querySelector("#costTotal"),
   creativeRows: document.querySelector("#creativeRows"),
   creativeTotal: document.querySelector("#creativeTotal"),
+  auditRows: document.querySelector("#auditRows"),
+  loginForm: document.querySelector("#loginForm"),
+  loginMessage: document.querySelector("#loginMessage"),
+  userBadge: document.querySelector("#userBadge"),
+  logoutButton: document.querySelector("#logoutButton"),
   salesRows: document.querySelector("#salesRows"),
   salesTotal: document.querySelector("#salesTotal"),
   renewalRows: document.querySelector("#renewalRows"),
@@ -176,8 +184,60 @@ function setupRemoteStore() {
   remoteStore.enabled = true;
 }
 
+async function requireAuth() {
+  if (!remoteStore.enabled) {
+    document.body.classList.remove("is-locked");
+    return true;
+  }
+
+  const { data } = await remoteStore.client.auth.getSession();
+  remoteStore.user = data?.session?.user || null;
+
+  remoteStore.client.auth.onAuthStateChange((_event, session) => {
+    remoteStore.user = session?.user || null;
+    if (remoteStore.user) {
+      document.body.classList.remove("is-locked");
+      renderUser();
+      loadRemoteState().then(() => render());
+      loadAuditLog().then(renderAuditLog);
+    } else {
+      document.body.classList.add("is-locked");
+    }
+  });
+
+  if (!remoteStore.user) {
+    document.body.classList.add("is-locked");
+    return false;
+  }
+
+  document.body.classList.remove("is-locked");
+  renderUser();
+  return true;
+}
+
+function renderUser() {
+  if (!els.userBadge) return;
+  els.userBadge.textContent = remoteStore.user?.email || "Locale";
+}
+
+async function login(email, password) {
+  if (!remoteStore.enabled) return;
+  els.loginMessage.textContent = "Accesso in corso...";
+  const { error } = await remoteStore.client.auth.signInWithPassword({ email, password });
+  if (error) {
+    els.loginMessage.textContent = "Login non riuscito. Controlla email e password.";
+    return;
+  }
+  els.loginMessage.textContent = "";
+}
+
+async function logout() {
+  if (!remoteStore.enabled) return;
+  await remoteStore.client.auth.signOut();
+}
+
 async function loadRemoteState() {
-  if (!remoteStore.enabled) return false;
+  if (!remoteStore.enabled || !remoteStore.user) return false;
 
   const { data, error } = await remoteStore.client
     .from(REMOTE_TABLE)
@@ -215,13 +275,15 @@ function queueRemoteSave() {
 }
 
 async function saveRemoteStateNow() {
-  if (!remoteStore.enabled) return;
+  if (!remoteStore.enabled || !remoteStore.user) return;
   const { error } = await remoteStore.client
     .from(REMOTE_TABLE)
     .upsert({
       id: REMOTE_STATE_ID,
       data: state,
       updated_at: new Date().toISOString(),
+      updated_by: remoteStore.user.id,
+      updated_by_email: remoteStore.user.email,
     });
 
   if (error) {
@@ -231,6 +293,49 @@ async function saveRemoteStateNow() {
   }
 
   setSaveMarker("Salvato online");
+}
+
+async function recordAudit(action, scope, details = {}) {
+  const entry = {
+    created_at: new Date().toISOString(),
+    user_email: remoteStore.user?.email || "locale",
+    action,
+    scope,
+    details,
+  };
+
+  remoteStore.audit = [entry, ...remoteStore.audit].slice(0, 50);
+  renderAuditLog();
+
+  if (!remoteStore.enabled || !remoteStore.user) return;
+
+  const { error } = await remoteStore.client
+    .from(AUDIT_TABLE)
+    .insert({
+      user_id: remoteStore.user.id,
+      user_email: remoteStore.user.email,
+      action,
+      scope,
+      details,
+    });
+
+  if (error) console.warn("Audit log failed", error);
+}
+
+async function loadAuditLog() {
+  if (!remoteStore.enabled || !remoteStore.user) return;
+  const { data, error } = await remoteStore.client
+    .from(AUDIT_TABLE)
+    .select("created_at,user_email,action,scope,details")
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    console.warn("Audit load failed", error);
+    return;
+  }
+
+  remoteStore.audit = data || [];
 }
 
 function showSavedState() {
@@ -334,6 +439,7 @@ function render() {
   renderCosts();
   renderSales();
   renderRenewals(rows);
+  renderAuditLog();
   showSavedState();
 }
 
@@ -602,6 +708,31 @@ function renderRenewals(rows) {
   }).join("");
 }
 
+function renderAuditLog() {
+  if (!els.auditRows) return;
+  const rows = remoteStore.audit || [];
+  els.auditRows.innerHTML = rows.map((row) => {
+    const when = row.created_at ? new Date(row.created_at).toLocaleString("it-IT") : "";
+    const detail = auditDetail(row.details || {});
+    return `
+      <tr>
+        <td>${escapeHtml(when)}</td>
+        <td>${escapeHtml(row.user_email || "")}</td>
+        <td><span class="status info">${escapeHtml(row.action || "")}</span></td>
+        <td>${escapeHtml(row.scope || "")}</td>
+        <td>${escapeHtml(detail)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function auditDetail(details) {
+  if (details.field) return `${details.field}: ${details.before ?? ""} -> ${details.after ?? ""}`;
+  if (details.name) return details.name;
+  if (details.index !== undefined) return `Riga ${Number(details.index) + 1}`;
+  return JSON.stringify(details);
+}
+
 function syncOptions() {
   els.targetMargin.value = state.settings.targetMargin;
   setOptions(document.querySelector('form#activityForm select[name="client"]'), state.clients.map((client) => client.name));
@@ -651,10 +782,12 @@ function commitCellEdit(target, shouldRender = true) {
   ]);
 
   if (scope === "settings") {
+    const before = state.settings[field];
     state.settings[field] = settingsFields.has(field) ? Number(target.value) || 0 : target.value.trim();
     state.settings.targetMargin = Number(state.settings.targetMargin) || 0;
     els.targetMargin.value = state.settings.targetMargin;
     if (shouldRender) {
+      recordAudit("modifica", scope, { field, before, after: state.settings[field] });
       render();
     } else {
       saveState();
@@ -669,6 +802,7 @@ function commitCellEdit(target, shouldRender = true) {
   if (!Array.isArray(collection) || !collection[index]) return;
 
   const previousName = scope === "clients" && field === "name" ? collection[index].name : null;
+  const before = collection[index][field];
   const numericFields = new Set([
     "monthlyFee",
     "adsBudget",
@@ -708,6 +842,7 @@ function commitCellEdit(target, shouldRender = true) {
   }
 
   if (shouldRender) {
+    recordAudit("modifica", scope, { index, field, before, after: nextValue });
     render();
   } else {
     saveState();
@@ -718,6 +853,7 @@ function commitCellEdit(target, shouldRender = true) {
 function deleteRow(scope, index) {
   const collection = state[scope];
   if (!Array.isArray(collection) || !collection[index]) return;
+  const deleted = collection[index];
   if (scope === "clients") {
     const clientName = collection[index].name;
     state.activities = state.activities.filter((activity) => activity.client !== clientName);
@@ -725,6 +861,7 @@ function deleteRow(scope, index) {
     state.creatives = (state.creatives || []).filter((plan) => plan.client !== clientName);
   }
   collection.splice(index, 1);
+  recordAudit("elimina", scope, { index, name: deleted.name || deleted.client || deleted.task || deleted.period || "" });
   render();
 }
 
@@ -732,14 +869,15 @@ function handleForm(id, mapper) {
   document.querySelector(id).addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    mapper(Object.fromEntries(new FormData(form)));
+    const created = mapper(Object.fromEntries(new FormData(form)));
+    if (created) recordAudit("aggiunge", created.scope, created.details);
     form.reset();
     render();
   });
 }
 
 handleForm("#clientForm", (data) => {
-  state.clients.push({
+  const item = {
     name: data.name,
     status: data.status,
     type: data.type,
@@ -750,11 +888,13 @@ handleForm("#clientForm", (data) => {
     monthlyExtra: Number(data.monthlyExtra) || 0,
     oneTimeExtra: 0,
     variable: 0,
-  });
+  };
+  state.clients.push(item);
+  return { scope: "clients", details: { name: item.name } };
 });
 
 handleForm("#activityForm", (data) => {
-  state.activities.push({
+  const item = {
     client: data.client,
     phase: data.phase,
     type: data.type,
@@ -768,11 +908,13 @@ handleForm("#activityForm", (data) => {
     minutes: Number(data.minutes) || 0,
     times: Number(data.times) || 0,
     manualHours: 0,
-  });
+  };
+  state.activities.push(item);
+  return { scope: "activities", details: { name: item.task, client: item.client } };
 });
 
 handleForm("#costForm", (data) => {
-  state.costs.push({
+  const item = {
     name: data.name,
     category: data.category,
     project: data.project,
@@ -781,12 +923,14 @@ handleForm("#costForm", (data) => {
     amount: Number(data.amount) || 0,
     impacts: data.impacts,
     notes: data.notes,
-  });
+  };
+  state.costs.push(item);
+  return { scope: "costs", details: { name: item.name, client: item.project } };
 });
 
 handleForm("#creativeForm", (data) => {
   state.creatives = state.creatives || [];
-  state.creatives.push({
+  const item = {
     client: data.client,
     owner: data.owner,
     months: Number(data.months) || 1,
@@ -796,18 +940,22 @@ handleForm("#creativeForm", (data) => {
     minutesPerGraphic: Number(data.minutesPerGraphic) || 0,
     minutesPerAdCreative: Number(data.minutesPerAdCreative) || 0,
     notes: data.notes,
-  });
+  };
+  state.creatives.push(item);
+  return { scope: "creatives", details: { name: `${item.client} - ${item.monthlyGraphicsTarget} grafiche/mese`, client: item.client } };
 });
 
 handleForm("#salesForm", (data) => {
-  state.sales.push({
+  const item = {
     period: data.period,
     proposals: Number(data.proposals) || 0,
     closed: Number(data.closed) || 0,
     salesHours: Number(data.salesHours) || 0,
     otherCosts: Number(data.otherCosts) || 0,
     firstContract: Number(data.firstContract) || 0,
-  });
+  };
+  state.sales.push(item);
+  return { scope: "sales", details: { name: item.period } };
 });
 
 document.querySelectorAll(".tab").forEach((button) => {
@@ -839,7 +987,9 @@ document.addEventListener("click", (event) => {
 });
 
 els.targetMargin.addEventListener("change", () => {
+  const before = state.settings.targetMargin;
   state.settings.targetMargin = Number(els.targetMargin.value) || 0;
+  recordAudit("modifica", "settings", { field: "targetMargin", before, after: state.settings.targetMargin });
   render();
 });
 
@@ -850,6 +1000,7 @@ els.targetMargin.addEventListener("change", () => {
 document.querySelector("#resetData").addEventListener("click", () => {
   if (!confirm("Ripristinare i dati demo iniziali?")) return;
   state = structuredClone(baseData);
+  recordAudit("reset", "app", { name: "Ripristino demo" });
   render();
 });
 
@@ -862,6 +1013,14 @@ document.querySelector("#exportJson").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+els.loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  login(data.email, data.password);
+});
+
+els.logoutButton.addEventListener("click", logout);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -880,8 +1039,12 @@ async function bootApp() {
   state = loadLocalState();
   setupRemoteStore();
 
-  if (remoteStore.enabled) {
+  const canOpen = await requireAuth();
+  if (!canOpen) return;
+
+  if (remoteStore.enabled && remoteStore.user) {
     await loadRemoteState();
+    await loadAuditLog();
   } else {
     setSaveMarker("Locale: configura Supabase");
   }

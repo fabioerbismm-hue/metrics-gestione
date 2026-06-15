@@ -8,7 +8,19 @@
     <link rel="apple-touch-icon" href="assets/metrics-logo.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="is-locked">
+    <section id="authScreen" class="auth-screen">
+      <form id="loginForm" class="auth-card">
+        <img src="assets/metrics-logo.png" alt="Metrics" />
+        <h1>Metrics</h1>
+        <p>Accedi per modificare dati, costi e operativita.</p>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">Accedi</button>
+        <span id="loginMessage" class="auth-message"></span>
+      </form>
+    </section>
+
     <aside class="sidebar">
       <div class="brand">
         <img class="brand-mark" src="assets/metrics-logo.png" alt="Metrics" />
@@ -25,10 +37,13 @@
         <button class="tab" data-view="costs" title="Costi e tool">Costi</button>
         <button class="tab" data-view="sales" title="Acquisizione">Acquisizione</button>
         <button class="tab" data-view="renewals" title="Rinnovi">Rinnovi</button>
+        <button class="tab" data-view="audit" title="Registro modifiche">Log</button>
       </nav>
       <div class="sidebar-actions">
+        <span id="userBadge" class="user-badge"></span>
         <button id="exportJson" class="ghost">Esporta JSON</button>
         <button id="resetData" class="ghost danger">Reset demo</button>
+        <button id="logoutButton" class="ghost">Esci</button>
       </div>
     </aside>
 
@@ -334,6 +349,31 @@
             <span class="muted">Prezzi minimi aggiornati dai dati operativi</span>
           </div>
           <div id="renewalRows" class="renewal-grid"></div>
+        </div>
+      </section>
+
+      <section id="audit" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Registro modifiche</h2>
+              <span class="muted">Ultime modifiche salvate online</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Utente</th>
+                  <th>Azione</th>
+                  <th>Area</th>
+                  <th>Dettaglio</th>
+                </tr>
+              </thead>
+              <tbody id="auditRows"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>

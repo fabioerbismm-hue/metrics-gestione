@@ -26,4 +26,13 @@ La app supporta Supabase come database condiviso.
 
 Finche `config.js` non contiene le credenziali Supabase, l'app continua a salvare i dati in locale nel browser.
 
-Nota: lo schema attuale abilita lettura/scrittura pubblica per semplificare il primo deploy condiviso. Il prossimo step consigliato e aggiungere login e permessi.
+## Login e registro modifiche
+
+La versione online richiede login Supabase.
+
+1. In Supabase apri `Authentication` > `Users`.
+2. Crea un utente per Fabio e uno per Frego.
+3. Usa email e password per accedere alla piattaforma.
+4. Riesegui `supabase-schema.sql` se hai una versione precedente dello schema.
+
+Il registro modifiche salva email utente, area modificata, azione e dettaglio del cambio.
