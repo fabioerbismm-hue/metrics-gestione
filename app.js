@@ -353,13 +353,15 @@ function renderKpis(rows) {
   const directCosts = active.reduce((sum, row) => sum + row.directCosts, 0);
   const margin = active.reduce((sum, row) => sum + row.margin, 0);
   const hours = active.reduce((sum, row) => sum + row.hours, 0);
-  const fabioHours = personMonthlyHours("Fabio");
+  const peopleBreakdown = state.people
+    .map((person) => `${person} ${decimal.format(personMonthlyHours(person))} h`)
+    .join(" · ");
   const splitGross = Math.max(0, margin / 2);
   const netFabio = splitGross * Number(state.settings.taxCoefficient) * (1 - Number(state.settings.inpsRate) / 100);
   const kpis = [
     ["Ricavi clienti attivi", euro.format(revenue), `${active.length} clienti in gestione`, "teal"],
     ["Margine clienti", euro.format(margin), `${pct.format(revenue ? margin / revenue : 0)} dopo costi diretti`, "green"],
-    ["Ore operative", `${decimal.format(hours)} h`, `${decimal.format(fabioHours)} h su Fabio`, "blue"],
+    ["Ore operative", `${decimal.format(hours)} h`, peopleBreakdown, "blue"],
     ["Netto Fabio stimato", euro.format(netFabio), `Split lordo ${euro.format(splitGross)}`, "amber"],
   ];
   els.kpiGrid.innerHTML = kpis.map(([label, value, note, color]) => `
