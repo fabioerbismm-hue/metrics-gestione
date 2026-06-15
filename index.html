@@ -75,6 +75,9 @@
                   <tr>
                     <th>Cliente</th>
                     <th>Ricavi</th>
+                    <th>Mesi attivi</th>
+                    <th>Generato</th>
+                    <th>Rinnovo</th>
                     <th>Costi diretti</th>
                     <th>Ore</th>
                     <th>Margine</th>
@@ -124,6 +127,14 @@
               <label>Canone mensile<input name="monthlyFee" type="number" min="0" step="50" value="0" /></label>
               <label>Budget ads separato<input name="adsBudget" type="number" min="0" step="50" value="0" /></label>
               <label>Extra mensili<input name="monthlyExtra" type="number" min="0" step="50" value="0" /></label>
+              <label>Mesi attivi<input name="activeMonths" type="number" min="0" step="1" value="0" /></label>
+              <label>Rinnovo
+                <select name="renewalStatus">
+                  <option>Da decidere</option>
+                  <option>Rinnovato</option>
+                  <option>Non rinnovato</option>
+                </select>
+              </label>
               <label>Note strategiche<input name="reason" /></label>
               <button class="primary" type="submit">Aggiungi cliente</button>
             </form>
@@ -141,6 +152,9 @@
                     <th>Servizio</th>
                     <th>Canone</th>
                     <th>Extra</th>
+                    <th>Mesi attivi</th>
+                    <th>Generato</th>
+                    <th>Rinnovo</th>
                     <th>Ore</th>
                     <th>Margine</th>
                     <th>Alert</th>

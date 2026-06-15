@@ -31,6 +31,8 @@ const baseData = {
       monthlyExtra: 0,
       oneTimeExtra: 0,
       variable: 0,
+      renewalStatus: "Da decidere",
+      activeMonths: 4,
     },
     {
       name: "Mirko / Evolution",
@@ -43,6 +45,8 @@ const baseData = {
       monthlyExtra: 0,
       oneTimeExtra: 0,
       variable: 0,
+      renewalStatus: "Da decidere",
+      activeMonths: 4,
     },
   ],
   activities: [
@@ -395,6 +399,8 @@ function capacityFor(person) {
 
 function clientEconomics(client) {
   const revenue = Number(client.monthlyFee) + Number(client.monthlyExtra) + Number(client.oneTimeExtra) + Number(client.variable);
+  const activeMonths = Number(client.activeMonths) || 0;
+  const totalGenerated = revenue * activeMonths;
   const directCosts = state.costs
     .filter((cost) => cost.project === client.name && cost.impacts === "Si")
     .reduce((sum, cost) => sum + monthlyAmount(cost), 0);
@@ -410,7 +416,7 @@ function clientEconomics(client) {
   const target = Number(state.settings.targetMargin) / 100;
   const minimumPrice = target >= 1 ? directCosts + laborValue : (directCosts + laborValue) / Math.max(0.05, 1 - target);
   const alert = alertFor({ client, revenue, marginPct, minimumPrice, hours });
-  return { revenue, directCosts, hours, laborValue, margin, marginPct, minimumPrice, alert };
+  return { revenue, activeMonths, totalGenerated, directCosts, hours, laborValue, margin, marginPct, minimumPrice, alert };
 }
 
 function alertFor(info) {
@@ -447,6 +453,11 @@ function normalizeState() {
   state.creatives = Array.isArray(state.creatives) ? state.creatives : structuredClone(baseData.creatives);
   state.people = Array.isArray(state.people) ? state.people : structuredClone(baseData.people);
   state.clients = Array.isArray(state.clients) ? state.clients : [];
+  state.clients = state.clients.map((client) => ({
+    renewalStatus: "Da decidere",
+    activeMonths: 0,
+    ...client,
+  }));
   state.activities = Array.isArray(state.activities) ? state.activities : [];
   state.costs = Array.isArray(state.costs) ? state.costs : [];
   state.sales = Array.isArray(state.sales) ? state.sales : [];
@@ -456,6 +467,7 @@ function normalizeState() {
 function renderKpis(rows) {
   const active = rows.filter((row) => row.client.status === "Attivo");
   const revenue = active.reduce((sum, row) => sum + row.revenue, 0);
+  const totalGenerated = rows.reduce((sum, row) => sum + row.totalGenerated, 0);
   const directCosts = active.reduce((sum, row) => sum + row.directCosts, 0);
   const margin = active.reduce((sum, row) => sum + row.margin, 0);
   const hours = active.reduce((sum, row) => sum + row.hours, 0);
@@ -465,7 +477,7 @@ function renderKpis(rows) {
   const splitGross = Math.max(0, margin / 2);
   const netFabio = splitGross * Number(state.settings.taxCoefficient) * (1 - Number(state.settings.inpsRate) / 100);
   const kpis = [
-    ["Ricavi clienti attivi", euro.format(revenue), `${active.length} clienti in gestione`, "teal"],
+    ["Ricavi clienti attivi", euro.format(revenue), `${active.length} attivi · ${euro.format(totalGenerated)} generati`, "teal"],
     ["Margine clienti", euro.format(margin), `${pct.format(revenue ? margin / revenue : 0)} dopo costi diretti`, "green"],
     ["Ore operative", `${decimal.format(hours)} h`, peopleBreakdown, "blue"],
     ["Netto Fabio stimato", euro.format(netFabio), `Split lordo ${euro.format(splitGross)}`, "amber"],
@@ -490,6 +502,9 @@ function dashboardClientRow(row) {
     <tr>
       <td><strong>${escapeHtml(row.client.name)}</strong><br><span class="muted">${escapeHtml(row.client.type)}</span></td>
       <td>${euro.format(row.revenue)}</td>
+      <td>${decimal.format(row.activeMonths)}</td>
+      <td>${euro.format(row.totalGenerated)}</td>
+      <td><span class="status ${renewalKind(row.client.renewalStatus)}">${escapeHtml(row.client.renewalStatus)}</span></td>
       <td>${euro.format(row.directCosts)}</td>
       <td>${decimal.format(row.hours)} h</td>
       <td>${euro.format(row.margin)}<br><span class="muted">${pct.format(row.marginPct)}</span></td>
@@ -510,12 +525,21 @@ function clientEditRow(row, index) {
       <td><input class="cell-input wide-input" data-scope="clients" data-index="${index}" data-field="service" value="${escapeAttr(row.client.service)}" /></td>
       <td><input class="cell-input money-input" type="number" min="0" step="50" data-scope="clients" data-index="${index}" data-field="monthlyFee" value="${Number(row.client.monthlyFee) || 0}" /></td>
       <td><input class="cell-input money-input" type="number" min="0" step="50" data-scope="clients" data-index="${index}" data-field="monthlyExtra" value="${Number(row.client.monthlyExtra) || 0}" /></td>
+      <td><input class="cell-input number-input" type="number" min="0" step="1" data-scope="clients" data-index="${index}" data-field="activeMonths" value="${Number(row.client.activeMonths) || 0}" /></td>
+      <td>${euro.format(row.totalGenerated)}</td>
+      <td>${selectHtml("clients", index, "renewalStatus", ["Da decidere", "Rinnovato", "Non rinnovato"], row.client.renewalStatus, renewalKind(row.client.renewalStatus))}</td>
       <td>${decimal.format(row.hours)} h</td>
       <td>${euro.format(row.margin)}<br><span class="muted">${pct.format(row.marginPct)}</span></td>
       <td><span class="status ${row.alert.kind}">${row.alert.label}</span></td>
       <td><button class="icon-btn danger" data-action="delete" data-scope="clients" data-index="${index}" title="Elimina cliente">x</button></td>
     </tr>
   `;
+}
+
+function renewalKind(label) {
+  if (label === "Rinnovato") return "good";
+  if (label === "Non rinnovato") return "bad";
+  return "warn";
 }
 
 function renderPeople() {
@@ -697,6 +721,9 @@ function renderRenewals(rows) {
         <h3>${escapeHtml(row.client.name)}</h3>
         <dl>
           <dt>Prezzo attuale</dt><dd>${euro.format(current)}</dd>
+          <dt>Rinnovo</dt><dd><span class="status ${renewalKind(row.client.renewalStatus)}">${escapeHtml(row.client.renewalStatus)}</span></dd>
+          <dt>Mesi attivi</dt><dd>${decimal.format(row.activeMonths)}</dd>
+          <dt>Totale generato</dt><dd>${euro.format(row.totalGenerated)}</dd>
           <dt>Prezzo minimo</dt><dd>${euro.format(suggested)}</dd>
           <dt>Aumento suggerito</dt><dd>${euro.format(increase)}</dd>
           <dt>Margine dopo rinnovo</dt><dd>${euro.format(after)}</dd>
@@ -807,6 +834,7 @@ function commitCellEdit(target, shouldRender = true) {
     "monthlyFee",
     "adsBudget",
     "monthlyExtra",
+    "activeMonths",
     "oneTimeExtra",
     "variable",
     "minutes",
@@ -888,6 +916,8 @@ handleForm("#clientForm", (data) => {
     monthlyExtra: Number(data.monthlyExtra) || 0,
     oneTimeExtra: 0,
     variable: 0,
+    renewalStatus: data.renewalStatus,
+    activeMonths: Number(data.activeMonths) || 0,
   };
   state.clients.push(item);
   return { scope: "clients", details: { name: item.name } };
