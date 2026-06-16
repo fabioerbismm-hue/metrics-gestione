@@ -106,6 +106,7 @@ const baseData = {
 };
 
 let state = structuredClone(baseData);
+let currentAccess = { role: "admin", clientName: "" };
 let selectedCrmClient = "";
 let remoteStore = {
   client: null,
@@ -235,7 +236,9 @@ async function requireAuth() {
 
 function renderUser() {
   if (!els.userBadge) return;
-  els.userBadge.textContent = remoteStore.user?.email || "Locale";
+  const email = remoteStore.user?.email || "Locale";
+  const suffix = currentAccess.role === "client" ? ` - ${currentAccess.clientName}` : " - Admin";
+  els.userBadge.textContent = `${email}${remoteStore.enabled ? suffix : ""}`;
 }
 
 async function login(email, password) {
@@ -447,8 +450,15 @@ function allEconomics() {
 
 function render() {
   normalizeState();
+  if (isAccessBlocked()) {
+    document.body.classList.add("is-locked");
+    els.loginMessage.textContent = "Utente non associato a nessun cliente. Inserisci l'email login nella scheda cliente.";
+    return;
+  }
+  document.body.classList.remove("is-locked");
   saveState();
   syncOptions();
+  if (isClientPortal()) activateView("crm");
   const rows = allEconomics();
   renderKpis(rows);
   renderClients(rows);
@@ -471,6 +481,7 @@ function normalizeState() {
   state.clients = state.clients.map((client) => ({
     renewalStatus: "Da decidere",
     activeMonths: 0,
+    portalEmail: "",
     ...client,
   }));
   state.activities = Array.isArray(state.activities) ? state.activities : [];
@@ -478,6 +489,36 @@ function normalizeState() {
   state.sales = Array.isArray(state.sales) ? state.sales : [];
   state.crmLeads = Array.isArray(state.crmLeads) ? state.crmLeads.map(normalizeCrmLead) : [];
   state.settings = { ...structuredClone(baseData.settings), ...(state.settings || {}) };
+  updateAccessMode();
+}
+
+function updateAccessMode() {
+  const email = (remoteStore.user?.email || "").toLowerCase();
+  const adminEmails = new Set(["fabio.erbi.smm@gmail.com", "info@fabiofregoni.com"]);
+  const portalClient = state.clients.find((client) => (client.portalEmail || "").toLowerCase() === email);
+
+  if (!email || adminEmails.has(email)) {
+    currentAccess = { role: "admin", clientName: "" };
+  } else if (portalClient) {
+    currentAccess = { role: "client", clientName: portalClient.name };
+  } else {
+    currentAccess = { role: "blocked", clientName: "" };
+  }
+
+  document.body.classList.toggle("is-client-portal", currentAccess.role === "client");
+  document.body.classList.toggle("is-access-blocked", currentAccess.role === "blocked");
+  if (currentAccess.role === "client") {
+    selectedCrmClient = currentAccess.clientName;
+  }
+  renderUser();
+}
+
+function isClientPortal() {
+  return currentAccess.role === "client";
+}
+
+function isAccessBlocked() {
+  return currentAccess.role === "blocked";
 }
 
 function normalizeCrmLead(lead) {
@@ -599,6 +640,10 @@ function crmMetrics(leads) {
 }
 
 function currentCrmClient() {
+  if (isClientPortal()) {
+    selectedCrmClient = currentAccess.clientName;
+    return selectedCrmClient;
+  }
   if (!selectedCrmClient || !state.clients.some((client) => client.name === selectedCrmClient)) {
     selectedCrmClient = state.clients[0]?.name || "";
   }
@@ -668,6 +713,7 @@ function clientEditRow(row, index) {
       <td><input class="cell-input money-input" type="number" min="0" step="50" data-scope="clients" data-index="${index}" data-field="monthlyExtra" value="${Number(row.client.monthlyExtra) || 0}" /></td>
       <td><input class="cell-input number-input" type="number" min="0" step="1" data-scope="clients" data-index="${index}" data-field="activeMonths" value="${Number(row.client.activeMonths) || 0}" /></td>
       <td>${euro.format(row.totalGenerated)}</td>
+      <td><input class="cell-input medium-input" type="email" data-scope="clients" data-index="${index}" data-field="portalEmail" value="${escapeAttr(row.client.portalEmail)}" /></td>
       <td>${selectHtml("clients", index, "renewalStatus", ["Da decidere", "Rinnovato", "Non rinnovato"], row.client.renewalStatus, renewalKind(row.client.renewalStatus))}</td>
       <td>${decimal.format(row.hours)} h</td>
       <td>${euro.format(row.margin)}<br><span class="muted">${pct.format(row.marginPct)}</span></td>
@@ -824,6 +870,11 @@ function renderCrm() {
 }
 
 function renderCrmClients(activeClient) {
+  if (isClientPortal()) {
+    els.crmCurrentClient.textContent = activeClient ? `Area cliente: ${activeClient}` : "Area cliente";
+    els.crmClientList.innerHTML = "";
+    return;
+  }
   els.crmCurrentClient.textContent = activeClient ? `CRM aperto: ${activeClient}` : "Seleziona un cliente";
   if (!state.clients.length) {
     els.crmClientList.innerHTML = `<p class="empty-state">Aggiungi un cliente per creare il suo CRM dedicato.</p>`;
@@ -1311,6 +1362,7 @@ handleForm("#clientForm", (data) => {
     monthlyExtra: Number(data.monthlyExtra) || 0,
     oneTimeExtra: 0,
     variable: 0,
+    portalEmail: data.portalEmail,
     renewalStatus: data.renewalStatus,
     activeMonths: Number(data.activeMonths) || 0,
   };
@@ -1398,6 +1450,7 @@ handleForm("#salesForm", (data) => {
 });
 
 function activateView(viewId) {
+  if (isClientPortal() && viewId !== "crm") viewId = "crm";
   const tab = document.querySelector(`.tab[data-view="${viewId}"]`);
   const view = document.querySelector(`#${viewId}`);
   if (!tab || !view) return;
@@ -1435,6 +1488,7 @@ document.addEventListener("click", (event) => {
   }
 
   if (button.dataset.action === "select-crm-client") {
+    if (isClientPortal()) return;
     selectedCrmClient = button.dataset.client || "";
     els.crmSearch.value = "";
     els.crmStatusFilter.value = "";

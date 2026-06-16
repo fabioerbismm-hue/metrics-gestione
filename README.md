@@ -37,6 +37,23 @@ La versione online richiede login Supabase.
 
 Il registro modifiche salva email utente, area modificata, azione e dettaglio del cambio.
 
+## Login cliente
+
+Gli admin sono:
+
+- `fabio.erbi.smm@gmail.com`
+- `info@fabiofregoni.com`
+
+Per dare accesso a un cliente:
+
+1. In Supabase vai su `Authentication` > `Users`.
+2. Crea un utente con l'email del cliente e una password.
+3. Nella piattaforma, apri `Clienti`.
+4. Nella riga del cliente compila `Login cliente` con la stessa email.
+5. Il cliente, entrando con quella email, vede solo il CRM del suo cliente.
+
+Se un utente Supabase non e admin e non e associato a nessun cliente, non vede la piattaforma.
+
 ## Zapier CRM
 
 Per aggiungere contatti da Zapier, riesegui `supabase-schema.sql` e usa una chiamata `POST` verso:

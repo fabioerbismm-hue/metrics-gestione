@@ -129,6 +129,7 @@
               <label>Budget ads separato<input name="adsBudget" type="number" min="0" step="50" value="0" /></label>
               <label>Extra mensili<input name="monthlyExtra" type="number" min="0" step="50" value="0" /></label>
               <label>Mesi attivi<input name="activeMonths" type="number" min="0" step="1" value="0" /></label>
+              <label>Email login cliente<input name="portalEmail" type="email" placeholder="cliente@email.it" /></label>
               <label>Rinnovo
                 <select name="renewalStatus">
                   <option>Da decidere</option>
@@ -155,6 +156,7 @@
                     <th>Extra</th>
                     <th>Mesi attivi</th>
                     <th>Generato</th>
+                    <th>Login cliente</th>
                     <th>Rinnovo</th>
                     <th>Ore</th>
                     <th>Margine</th>
@@ -283,7 +285,7 @@
       </section>
 
       <section id="crm" class="view">
-        <section class="panel crm-client-panel">
+        <section class="panel crm-client-panel admin-context">
           <div class="panel-head">
             <div>
               <h2>Ambienti clienti</h2>
@@ -293,7 +295,7 @@
           <div id="crmClientList" class="client-switcher"></div>
         </section>
         <div class="filterbar crm-filterbar">
-          <label>Import CSV<input id="crmCsvInput" type="file" accept=".csv,text/csv" /></label>
+          <label class="admin-only">Import CSV<input id="crmCsvInput" type="file" accept=".csv,text/csv" /></label>
           <label>Stato<select id="crmStatusFilter"></select></label>
           <label>Interesse<select id="crmInterestFilter"></select></label>
           <label>Campagna<select id="crmCampaignFilter"></select></label>

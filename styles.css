@@ -45,6 +45,27 @@ body:not(.is-locked) .auth-screen {
   display: none;
 }
 
+body.is-client-portal {
+  grid-template-columns: 220px 1fr;
+}
+
+body.is-client-portal .tab:not([data-view="crm"]),
+body.is-client-portal .period-control,
+body.is-client-portal #exportJson,
+body.is-client-portal #resetData,
+body.is-client-portal .admin-only {
+  display: none;
+}
+
+body.is-client-portal .brand small {
+  font-size: 0;
+}
+
+body.is-client-portal .brand small::after {
+  content: "Area cliente";
+  font-size: 0.92rem;
+}
+
 .auth-screen {
   min-height: 100vh;
   display: grid;
