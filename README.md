@@ -54,6 +54,14 @@ Per dare accesso a un cliente:
 
 Se un utente Supabase non e admin e non e associato a nessun cliente, non vede la piattaforma.
 
+## Import CRM
+
+Il CSV CRM deve avere queste colonne, in questo ordine:
+
+`Nome e cognome`, `Ragione sociale`, `Telefono`, `Email`, `LinkedIn`, `Sito web`, `Canale`, `Campagna`, `Data ingresso`, `Provincia / Area`, `Profilo`, `Livello interesse`, `Stato`, `Data appuntamento`, `Link Teams`, `Link inviato via mail`, `Reminder inviato`, `Comunicato su gruppo WA`, `Note Back-Office`, `Prossimo follow-up`, `Tipo follow-up`, `Esito ultimo contatto`, `Note post-call`, `Motivo scarto`, `Lead grezzi`.
+
+Quando importi un CSV, il CRM del cliente aperto viene sostituito con i contatti del file.
+
 ## Zapier CRM
 
 Per aggiungere contatti da Zapier, riesegui `supabase-schema.sql` e usa una chiamata `POST` verso:

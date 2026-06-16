@@ -120,6 +120,33 @@ let remoteStore = {
 const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
 const pct = new Intl.NumberFormat("it-IT", { style: "percent", maximumFractionDigits: 1 });
+const CRM_REQUIRED_HEADERS = [
+  "Nome e cognome",
+  "Ragione sociale",
+  "Telefono",
+  "Email",
+  "LinkedIn",
+  "Sito web",
+  "Canale",
+  "Campagna",
+  "Data ingresso",
+  "Provincia / Area",
+  "Profilo",
+  "Livello interesse",
+  "Stato",
+  "Data appuntamento",
+  "Link Teams",
+  "Link inviato via mail",
+  "Reminder inviato",
+  "Comunicato su gruppo WA",
+  "Note Back-Office",
+  "Prossimo follow-up",
+  "Tipo follow-up",
+  "Esito ultimo contatto",
+  "Note post-call",
+  "Motivo scarto",
+  "Lead grezzi",
+];
 
 const els = {
   viewTitle: document.querySelector("#viewTitle"),
@@ -1417,7 +1444,8 @@ function detectCsvDelimiter(text) {
 function csvRowsToObjects(text) {
   const rows = parseCsv(text);
   const headers = uniqueCsvHeaders((rows.shift() || []).map(cleanCsvHeader));
-  return rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, (row[index] || "").trim()])));
+  const objects = rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, (row[index] || "").trim()])));
+  return { headers, objects };
 }
 
 function cleanCsvHeader(header) {
@@ -1438,21 +1466,19 @@ async function importCrmCsv(file) {
   if (!file) return;
   const text = await readCsvFile(file);
   const clientName = currentCrmClient();
-  const imported = csvRowsToObjects(text).map((lead) => normalizeCrmLead({ ...lead, client: clientName }));
-  const existing = state.crmLeads || [];
-  const merged = [...existing];
-  imported.forEach((lead) => {
-    const key = crmLeadKey(lead);
-    const duplicateIndex = key ? merged.findIndex((item) => crmLeadKey(item) === key) : -1;
-    if (duplicateIndex >= 0) {
-      merged[duplicateIndex] = { ...merged[duplicateIndex], ...lead };
-    } else {
-      merged.push(lead);
-    }
-  });
-  state.crmLeads = merged;
+  const { headers, objects } = csvRowsToObjects(text);
+  const missingHeaders = CRM_REQUIRED_HEADERS.filter((header) => !headers.includes(header));
+  if (missingHeaders.length) {
+    alert(`CSV non importato. Mancano queste colonne: ${missingHeaders.join(", ")}`);
+    return;
+  }
+  const imported = objects.map((lead) => normalizeCrmLead({ ...lead, client: clientName }));
+  state.crmLeads = [
+    ...(state.crmLeads || []).filter((lead) => lead.client !== clientName),
+    ...imported,
+  ];
   resetCrmFilters();
-  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti aggiunti/aggiornati nel CRM ${clientName}` });
+  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti importati nel CRM ${clientName}`, client: clientName });
   render();
 }
 
@@ -1466,17 +1492,6 @@ async function readCsvFile(file) {
   } catch {
     return utf8;
   }
-}
-
-function crmLeadKey(lead) {
-  const email = (lead.email || "").toLowerCase();
-  const phone = (lead.phone || "").replace(/\s+/g, "");
-  const name = (lead.name || "").toLowerCase();
-  const company = (lead.company || "").toLowerCase();
-  if (email) return `${lead.client || ""}|email:${email}`;
-  if (phone) return `${lead.client || ""}|phone:${phone}`;
-  if (name && company) return `${lead.client || ""}|name:${name}|company:${company}`;
-  return "";
 }
 
 function resetCrmFilters() {
