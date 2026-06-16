@@ -34,6 +34,7 @@
         <button class="tab" data-view="clients" title="Clienti">Clienti</button>
         <button class="tab" data-view="activities" title="Attivita e tempi">Attivita</button>
         <button class="tab" data-view="creatives" title="Creativita grafiche e ads">Creativita</button>
+        <button class="tab" data-view="crm" title="CRM clienti">CRM</button>
         <button class="tab" data-view="costs" title="Costi e tool">Costi</button>
         <button class="tab" data-view="sales" title="Acquisizione">Acquisizione</button>
         <button class="tab" data-view="renewals" title="Rinnovi">Rinnovi</button>
@@ -275,6 +276,71 @@
                   </tr>
                 </thead>
                 <tbody id="creativeRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="crm" class="view">
+        <div class="filterbar crm-filterbar">
+          <label>Import CSV<input id="crmCsvInput" type="file" accept=".csv,text/csv" /></label>
+          <label>Stato<select id="crmStatusFilter"></select></label>
+          <label>Campagna<select id="crmCampaignFilter"></select></label>
+          <label>Cerca<input id="crmSearch" placeholder="Nome, azienda, email, telefono" /></label>
+        </div>
+        <div class="kpi-grid crm-kpis" id="crmKpiGrid"></div>
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Performance campagne</h2>
+                <span class="muted">Contatti, appuntamenti, chiusure e tassi</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Campagna</th>
+                    <th>Contatti</th>
+                    <th>Qualificati</th>
+                    <th>Appuntamenti</th>
+                    <th>Chiusure</th>
+                    <th>Scarti</th>
+                    <th>Conv.</th>
+                  </tr>
+                </thead>
+                <tbody id="crmCampaignRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel wide">
+            <div class="panel-head">
+              <div>
+                <h2>Contatti CRM</h2>
+                <span id="crmTotal" class="muted"></span>
+              </div>
+            </div>
+            <div class="table-wrap tall">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Contatto</th>
+                    <th>Azienda</th>
+                    <th>Telefono</th>
+                    <th>Email</th>
+                    <th>Canale</th>
+                    <th>Campagna</th>
+                    <th>Interesse</th>
+                    <th>Stato</th>
+                    <th>Appuntamento</th>
+                    <th>Follow-up</th>
+                    <th>Note</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="crmLeadRows"></tbody>
               </table>
             </div>
           </section>

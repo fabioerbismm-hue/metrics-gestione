@@ -574,6 +574,14 @@ select {
   background: var(--panel);
 }
 
+.crm-filterbar {
+  grid-template-columns: 0.9fr 0.75fr 1fr 1.2fr;
+}
+
+.crm-kpis {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
 .load-list {
   display: grid;
   gap: 12px;

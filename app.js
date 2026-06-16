@@ -102,6 +102,7 @@ const baseData = {
     { period: "2026-07", proposals: 0, closed: 0, salesHours: 0, otherCosts: 0, firstContract: 0 },
     { period: "2026-08", proposals: 0, closed: 0, salesHours: 0, otherCosts: 0, firstContract: 0 },
   ],
+  crmLeads: [],
 };
 
 let state = structuredClone(baseData);
@@ -133,6 +134,14 @@ const els = {
   costTotal: document.querySelector("#costTotal"),
   creativeRows: document.querySelector("#creativeRows"),
   creativeTotal: document.querySelector("#creativeTotal"),
+  crmKpiGrid: document.querySelector("#crmKpiGrid"),
+  crmCampaignRows: document.querySelector("#crmCampaignRows"),
+  crmLeadRows: document.querySelector("#crmLeadRows"),
+  crmTotal: document.querySelector("#crmTotal"),
+  crmCsvInput: document.querySelector("#crmCsvInput"),
+  crmSearch: document.querySelector("#crmSearch"),
+  crmStatusFilter: document.querySelector("#crmStatusFilter"),
+  crmCampaignFilter: document.querySelector("#crmCampaignFilter"),
   auditRows: document.querySelector("#auditRows"),
   loginForm: document.querySelector("#loginForm"),
   loginMessage: document.querySelector("#loginMessage"),
@@ -442,6 +451,7 @@ function render() {
   renderSettings();
   renderActivities();
   renderCreatives();
+  renderCrm();
   renderCosts();
   renderSales();
   renderRenewals(rows);
@@ -461,7 +471,74 @@ function normalizeState() {
   state.activities = Array.isArray(state.activities) ? state.activities : [];
   state.costs = Array.isArray(state.costs) ? state.costs : [];
   state.sales = Array.isArray(state.sales) ? state.sales : [];
+  state.crmLeads = Array.isArray(state.crmLeads) ? state.crmLeads.map(normalizeCrmLead) : [];
   state.settings = { ...structuredClone(baseData.settings), ...(state.settings || {}) };
+}
+
+function normalizeCrmLead(lead) {
+  return {
+    name: lead.name || lead["Nome e cognome"] || "",
+    company: lead.company || lead["Ragione sociale"] || "",
+    phone: lead.phone || lead.Telefono || "",
+    email: lead.email || lead.Email || "",
+    linkedin: lead.linkedin || lead.LinkedIn || "",
+    website: lead.website || lead["Sito web"] || "",
+    channel: lead.channel || lead.Canale || "",
+    campaign: lead.campaign || lead.Campagna || "",
+    entryDate: lead.entryDate || lead["Data ingresso"] || lead["Lead grezzi"] || "",
+    area: lead.area || lead["Provincia / Area"] || "",
+    profile: lead.profile || lead.Profilo || "",
+    interest: lead.interest || lead["Livello interesse"] || "",
+    status: lead.status || lead.Stato || "Da contattare",
+    appointmentDate: lead.appointmentDate || lead["Data appuntamento"] || "",
+    teamsLink: lead.teamsLink || lead["Link Teams"] || "",
+    emailSent: lead.emailSent || lead["Link inviato via mail"] || "",
+    reminderSent: lead.reminderSent || lead["Reminder inviato"] || "",
+    whatsappSent: lead.whatsappSent || lead["Comunicato su gruppo WA"] || "",
+    backofficeNotes: lead.backofficeNotes || lead["Note Back-Office"] || "",
+    nextFollowup: lead.nextFollowup || lead["Prossimo follow-up"] || "",
+    followupType: lead.followupType || lead["Tipo follow-up"] || "",
+    lastOutcome: lead.lastOutcome || lead["Esito ultimo contatto"] || "",
+    postCallNotes: lead.postCallNotes || lead["Note post-call"] || "",
+    discardReason: lead.discardReason || lead["Motivo scarto"] || "",
+    rawLead: lead.rawLead || lead["Lead grezzi"] || "",
+  };
+}
+
+function isClosedLead(lead) {
+  return /contratto|firmato|chius[oa]|cliente/i.test(lead.status || "") || /firmato|accordo/i.test(lead.lastOutcome || "");
+}
+
+function isAppointmentLead(lead) {
+  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato|qualificato/i.test(lead.status || "");
+}
+
+function isQualifiedLead(lead) {
+  return /qualificato|appuntamento|contratto|firmato/i.test(lead.status || "") || /alto|molto alto|medio-alto/i.test(lead.interest || "");
+}
+
+function isDiscardedLead(lead) {
+  return /scartato|non in target|numero errato|annullato/i.test(lead.status || "");
+}
+
+function crmMetrics(leads) {
+  const total = leads.length;
+  const qualified = leads.filter(isQualifiedLead).length;
+  const appointments = leads.filter(isAppointmentLead).length;
+  const closed = leads.filter(isClosedLead).length;
+  const discarded = leads.filter(isDiscardedLead).length;
+  const notAnswered = leads.filter((lead) => /non risposto/i.test(lead.status || "")).length;
+  return {
+    total,
+    qualified,
+    appointments,
+    closed,
+    discarded,
+    notAnswered,
+    qualifiedRate: total ? qualified / total : 0,
+    appointmentRate: total ? appointments / total : 0,
+    closeRate: total ? closed / total : 0,
+  };
 }
 
 function renderKpis(rows) {
@@ -649,6 +726,110 @@ function renderCreatives() {
   }).join("");
 }
 
+function renderCrm() {
+  if (!els.crmLeadRows) return;
+  const leads = state.crmLeads || [];
+  const filtered = filteredCrmLeads();
+  const metrics = crmMetrics(filtered);
+  const allMetrics = crmMetrics(leads);
+
+  els.crmKpiGrid.innerHTML = [
+    ["Contatti", metrics.total, `${allMetrics.total} totali nel CRM`],
+    ["Qualificati", metrics.qualified, pct.format(metrics.qualifiedRate)],
+    ["Appuntamenti", metrics.appointments, pct.format(metrics.appointmentRate)],
+    ["Chiusure", metrics.closed, pct.format(metrics.closeRate)],
+  ].map(([label, value, note]) => `
+    <article class="kpi">
+      <small>${label}</small>
+      <strong>${value}</strong>
+      <span>${note}</span>
+    </article>
+  `).join("");
+
+  els.crmTotal.textContent = `${filtered.length} contatti filtrati`;
+  renderCrmCampaigns(filtered);
+  renderCrmLeadRows(filtered);
+  syncCrmFilters();
+}
+
+function filteredCrmLeads() {
+  const search = (els.crmSearch?.value || "").trim().toLowerCase();
+  const status = els.crmStatusFilter?.value || "";
+  const campaign = els.crmCampaignFilter?.value || "";
+  return (state.crmLeads || []).filter((lead) => {
+    const haystack = `${lead.name} ${lead.company} ${lead.email} ${lead.phone}`.toLowerCase();
+    return (!search || haystack.includes(search))
+      && (!status || lead.status === status)
+      && (!campaign || lead.campaign === campaign);
+  });
+}
+
+function renderCrmCampaigns(leads) {
+  const groups = new Map();
+  leads.forEach((lead) => {
+    const key = lead.campaign || "(senza campagna)";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(lead);
+  });
+  const rows = [...groups.entries()]
+    .map(([campaign, items]) => ({ campaign, items, metrics: crmMetrics(items) }))
+    .sort((a, b) => b.metrics.total - a.metrics.total);
+
+  els.crmCampaignRows.innerHTML = rows.map((row) => `
+    <tr>
+      <td><strong>${escapeHtml(row.campaign)}</strong></td>
+      <td>${row.metrics.total}</td>
+      <td>${row.metrics.qualified}</td>
+      <td>${row.metrics.appointments}</td>
+      <td>${row.metrics.closed}</td>
+      <td>${row.metrics.discarded}</td>
+      <td>${pct.format(row.metrics.closeRate)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderCrmLeadRows(leads) {
+  els.crmLeadRows.innerHTML = leads.map((lead) => {
+    const index = state.crmLeads.indexOf(lead);
+    return `
+      <tr>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="name" value="${escapeAttr(lead.name)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="company" value="${escapeAttr(lead.company)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="phone" value="${escapeAttr(lead.phone)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="email" value="${escapeAttr(lead.email)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="channel" value="${escapeAttr(lead.channel)}" /></td>
+        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="campaign" value="${escapeAttr(lead.campaign)}" /></td>
+        <td>${selectHtml("crmLeads", index, "interest", crmInterestOptions(), lead.interest)}</td>
+        <td>${selectHtml("crmLeads", index, "status", crmStatusOptions(), lead.status, crmStatusKind(lead.status))}</td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="appointmentDate" value="${escapeAttr(lead.appointmentDate)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="nextFollowup" value="${escapeAttr(lead.nextFollowup)}" /></td>
+        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="backofficeNotes" value="${escapeAttr(lead.backofficeNotes || lead.postCallNotes)}" /></td>
+        <td><button class="icon-btn danger" data-action="delete" data-scope="crmLeads" data-index="${index}" title="Elimina lead">x</button></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function crmStatusOptions() {
+  const defaults = ["Da contattare", "Non risposto", "Richiamare", "Qualificato", "Appuntamento fissato", "Rischedulato", "Non presentato", "CONTRATTO FIRMATO", "Scartato", "Non in target", "Numero errato", "ANNULLATO"];
+  return uniqueOptions(defaults, (state.crmLeads || []).map((lead) => lead.status));
+}
+
+function crmInterestOptions() {
+  return uniqueOptions(["", "Basso", "Medio", "Medio-Alto", "Alto", "Molto Alto", "Da verificare"], (state.crmLeads || []).map((lead) => lead.interest));
+}
+
+function uniqueOptions(defaults, values) {
+  return [...new Set([...defaults, ...values.filter(Boolean)])];
+}
+
+function crmStatusKind(status) {
+  if (/contratto|firmato/i.test(status || "")) return "good";
+  if (/appuntamento|qualificato|rischedulato/i.test(status || "")) return "info";
+  if (/scartato|non in target|errato|annullato/i.test(status || "")) return "bad";
+  return "warn";
+}
+
 function renderCosts() {
   const total = state.costs.filter((cost) => cost.impacts === "Si").reduce((sum, cost) => sum + monthlyAmount(cost), 0);
   els.costTotal.textContent = `${euro.format(total)} / mese su margine`;
@@ -774,6 +955,13 @@ function syncOptions() {
   setOptions(els.delegationFilter, ["", ...state.delegations], ["Tutte", ...state.delegations]);
 }
 
+function syncCrmFilters() {
+  const statuses = crmStatusOptions();
+  const campaigns = uniqueOptions([], (state.crmLeads || []).map((lead) => lead.campaign));
+  setOptions(els.crmStatusFilter, ["", ...statuses], ["Tutti", ...statuses]);
+  setOptions(els.crmCampaignFilter, ["", ...campaigns], ["Tutte", ...campaigns]);
+}
+
 function setOptions(select, values, labels = values) {
   const current = select.value;
   select.innerHTML = values.map((value, index) => `<option value="${escapeHtml(value)}">${escapeHtml(labels[index])}</option>`).join("");
@@ -890,6 +1078,54 @@ function deleteRow(scope, index) {
   }
   collection.splice(index, 1);
   recordAudit("elimina", scope, { index, name: deleted.name || deleted.client || deleted.task || deleted.period || "" });
+  render();
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(cell);
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+  if (row.some((value) => value !== "")) rows.push(row);
+  return rows;
+}
+
+function csvRowsToObjects(text) {
+  const rows = parseCsv(text);
+  const headers = rows.shift() || [];
+  return rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] || ""])));
+}
+
+async function importCrmCsv(file) {
+  if (!file) return;
+  const text = await file.text();
+  const imported = csvRowsToObjects(text).map(normalizeCrmLead);
+  state.crmLeads = imported;
+  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti importati da CSV` });
   render();
 }
 
@@ -1025,6 +1261,15 @@ els.targetMargin.addEventListener("change", () => {
 
 [els.activitySearch, els.ownerFilter, els.delegationFilter].forEach((input) => {
   input.addEventListener("input", render);
+});
+
+[els.crmSearch, els.crmStatusFilter, els.crmCampaignFilter].forEach((input) => {
+  input.addEventListener("input", render);
+});
+
+els.crmCsvInput.addEventListener("change", (event) => {
+  importCrmCsv(event.target.files?.[0]);
+  event.target.value = "";
 });
 
 document.querySelector("#resetData").addEventListener("click", () => {
