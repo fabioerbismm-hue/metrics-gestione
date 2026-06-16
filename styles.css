@@ -741,6 +741,28 @@ textarea {
   color: var(--teal-dark);
 }
 
+.mini-btn.danger {
+  color: var(--red);
+}
+
+.mini-btn.danger:hover {
+  border-color: #ffc9c0;
+  background: var(--soft-red);
+}
+
+.crm-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.crm-row-check,
+#crmSelectAll {
+  width: 18px;
+  min-height: 18px;
+}
+
 .timeline {
   display: grid;
   gap: 12px;

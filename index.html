@@ -356,11 +356,17 @@
                 <h2>Contatti CRM</h2>
                 <span id="crmTotal" class="muted"></span>
               </div>
+              <div class="crm-bulk-actions">
+                <button class="mini-btn" type="button" data-action="select-visible-crm">Seleziona visibili</button>
+                <button class="mini-btn danger" type="button" data-action="delete-selected-crm">Elimina selezionati</button>
+                <button class="mini-btn danger" type="button" data-action="clear-crm-client">Pulisci CRM</button>
+              </div>
             </div>
             <div class="table-wrap tall">
               <table>
                 <thead>
                   <tr>
+                    <th><input id="crmSelectAll" type="checkbox" title="Seleziona righe visibili" /></th>
                     <th>Nome e cognome</th>
                     <th>Ragione sociale</th>
                     <th>Telefono</th>

@@ -142,6 +142,7 @@ const els = {
   crmCampaignRows: document.querySelector("#crmCampaignRows"),
   crmLeadRows: document.querySelector("#crmLeadRows"),
   crmTotal: document.querySelector("#crmTotal"),
+  crmSelectAll: document.querySelector("#crmSelectAll"),
   crmCsvInput: document.querySelector("#crmCsvInput"),
   crmSearch: document.querySelector("#crmSearch"),
   crmStatusFilter: document.querySelector("#crmStatusFilter"),
@@ -888,6 +889,7 @@ function renderCrm() {
   els.crmTotal.textContent = `${filtered.length} contatti filtrati per ${clientName || "cliente"}`;
   renderCrmCampaigns(filtered);
   renderCrmLeadRows(filtered);
+  updateCrmSelectionState();
   syncCrmFilters();
 }
 
@@ -988,6 +990,7 @@ function renderCrmLeadRows(leads) {
     const index = state.crmLeads.indexOf(lead);
     return `
       <tr>
+        <td><input class="crm-row-check" type="checkbox" data-crm-index="${index}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="name" value="${escapeAttr(lead.name)}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="company" value="${escapeAttr(lead.company)}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="phone" value="${escapeAttr(lead.phone)}" /></td>
@@ -1326,6 +1329,49 @@ function deleteRow(scope, index) {
   render();
 }
 
+function selectedCrmIndexes() {
+  return Array.from(document.querySelectorAll(".crm-row-check:checked"))
+    .map((input) => Number(input.dataset.crmIndex))
+    .filter((index) => !Number.isNaN(index));
+}
+
+function visibleCrmIndexes() {
+  return Array.from(document.querySelectorAll(".crm-row-check"))
+    .map((input) => Number(input.dataset.crmIndex))
+    .filter((index) => !Number.isNaN(index));
+}
+
+function updateCrmSelectionState() {
+  const visible = visibleCrmIndexes();
+  const selected = selectedCrmIndexes();
+  if (els.crmSelectAll) {
+    els.crmSelectAll.checked = visible.length > 0 && selected.length === visible.length;
+    els.crmSelectAll.indeterminate = selected.length > 0 && selected.length < visible.length;
+  }
+  const clientName = currentCrmClient();
+  const selectionNote = selected.length ? ` - ${selected.length} selezionati` : "";
+  els.crmTotal.textContent = `${visible.length} contatti filtrati per ${clientName || "cliente"}${selectionNote}`;
+}
+
+function deleteSelectedCrmRows() {
+  const indexes = [...new Set(selectedCrmIndexes())].sort((a, b) => b - a);
+  if (!indexes.length) return;
+  if (!confirm(`Eliminare ${indexes.length} contatti selezionati?`)) return;
+  indexes.forEach((index) => state.crmLeads.splice(index, 1));
+  recordAudit("elimina", "crmLeads", { name: `${indexes.length} contatti selezionati`, client: currentCrmClient() });
+  render();
+}
+
+function clearCurrentClientCrm() {
+  const clientName = currentCrmClient();
+  const count = (state.crmLeads || []).filter((lead) => lead.client === clientName).length;
+  if (!count) return;
+  if (!confirm(`Pulire tutto il CRM di ${clientName}? Verranno eliminati ${count} contatti.`)) return;
+  state.crmLeads = (state.crmLeads || []).filter((lead) => lead.client !== clientName);
+  recordAudit("pulisce", "crmLeads", { name: `${count} contatti rimossi`, client: clientName });
+  render();
+}
+
 function parseCsv(text) {
   const delimiter = detectCsvDelimiter(text);
   const rows = [];
@@ -1599,6 +1645,34 @@ document.addEventListener("click", (event) => {
     els.crmFollowupFilter.value = "";
     activateView("crm");
     render();
+  }
+
+  if (button.dataset.action === "select-visible-crm") {
+    document.querySelectorAll(".crm-row-check").forEach((input) => {
+      input.checked = true;
+    });
+    updateCrmSelectionState();
+  }
+
+  if (button.dataset.action === "delete-selected-crm") {
+    deleteSelectedCrmRows();
+  }
+
+  if (button.dataset.action === "clear-crm-client") {
+    clearCurrentClientCrm();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  if (event.target.matches(".crm-row-check")) {
+    updateCrmSelectionState();
+  }
+
+  if (event.target === els.crmSelectAll) {
+    document.querySelectorAll(".crm-row-check").forEach((input) => {
+      input.checked = els.crmSelectAll.checked;
+    });
+    updateCrmSelectionState();
   }
 });
 
