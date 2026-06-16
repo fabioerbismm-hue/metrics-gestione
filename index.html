@@ -283,6 +283,15 @@
       </section>
 
       <section id="crm" class="view">
+        <section class="panel crm-client-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Ambienti clienti</h2>
+              <span id="crmCurrentClient" class="muted"></span>
+            </div>
+          </div>
+          <div id="crmClientList" class="client-switcher"></div>
+        </section>
         <div class="filterbar crm-filterbar">
           <label>Import CSV<input id="crmCsvInput" type="file" accept=".csv,text/csv" /></label>
           <label>Stato<select id="crmStatusFilter"></select></label>

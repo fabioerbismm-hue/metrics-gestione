@@ -106,6 +106,7 @@ const baseData = {
 };
 
 let state = structuredClone(baseData);
+let selectedCrmClient = "";
 let remoteStore = {
   client: null,
   enabled: false,
@@ -135,6 +136,8 @@ const els = {
   creativeRows: document.querySelector("#creativeRows"),
   creativeTotal: document.querySelector("#creativeTotal"),
   crmKpiGrid: document.querySelector("#crmKpiGrid"),
+  crmClientList: document.querySelector("#crmClientList"),
+  crmCurrentClient: document.querySelector("#crmCurrentClient"),
   crmCampaignRows: document.querySelector("#crmCampaignRows"),
   crmLeadRows: document.querySelector("#crmLeadRows"),
   crmTotal: document.querySelector("#crmTotal"),
@@ -477,6 +480,7 @@ function normalizeState() {
 
 function normalizeCrmLead(lead) {
   return {
+    client: lead.client || lead.Cliente || selectedCrmClient || state.clients?.[0]?.name || "",
     name: lead.name || lead["Nome e cognome"] || "",
     company: lead.company || lead["Ragione sociale"] || "",
     phone: lead.phone || lead.Telefono || "",
@@ -539,6 +543,13 @@ function crmMetrics(leads) {
     appointmentRate: total ? appointments / total : 0,
     closeRate: total ? closed / total : 0,
   };
+}
+
+function currentCrmClient() {
+  if (!selectedCrmClient || !state.clients.some((client) => client.name === selectedCrmClient)) {
+    selectedCrmClient = state.clients[0]?.name || "";
+  }
+  return selectedCrmClient;
 }
 
 function renderKpis(rows) {
@@ -608,7 +619,12 @@ function clientEditRow(row, index) {
       <td>${decimal.format(row.hours)} h</td>
       <td>${euro.format(row.margin)}<br><span class="muted">${pct.format(row.marginPct)}</span></td>
       <td><span class="status ${row.alert.kind}">${row.alert.label}</span></td>
-      <td><button class="icon-btn danger" data-action="delete" data-scope="clients" data-index="${index}" title="Elimina cliente">x</button></td>
+      <td>
+        <div class="row-actions">
+          <button class="mini-btn" data-action="select-crm-client" data-client="${escapeAttr(row.client.name)}">CRM</button>
+          <button class="icon-btn danger" data-action="delete" data-scope="clients" data-index="${index}" title="Elimina cliente">x</button>
+        </div>
+      </td>
     </tr>
   `;
 }
@@ -728,7 +744,9 @@ function renderCreatives() {
 
 function renderCrm() {
   if (!els.crmLeadRows) return;
-  const leads = state.crmLeads || [];
+  const clientName = currentCrmClient();
+  renderCrmClients(clientName);
+  const leads = (state.crmLeads || []).filter((lead) => lead.client === clientName);
   const filtered = filteredCrmLeads();
   const metrics = crmMetrics(filtered);
   const allMetrics = crmMetrics(leads);
@@ -746,19 +764,40 @@ function renderCrm() {
     </article>
   `).join("");
 
-  els.crmTotal.textContent = `${filtered.length} contatti filtrati`;
+  els.crmTotal.textContent = `${filtered.length} contatti filtrati per ${clientName || "cliente"}`;
   renderCrmCampaigns(filtered);
   renderCrmLeadRows(filtered);
   syncCrmFilters();
 }
 
+function renderCrmClients(activeClient) {
+  els.crmCurrentClient.textContent = activeClient ? `CRM aperto: ${activeClient}` : "Seleziona un cliente";
+  if (!state.clients.length) {
+    els.crmClientList.innerHTML = `<p class="empty-state">Aggiungi un cliente per creare il suo CRM dedicato.</p>`;
+    return;
+  }
+  els.crmClientList.innerHTML = state.clients.map((client) => {
+    const clientLeads = (state.crmLeads || []).filter((lead) => lead.client === client.name);
+    const metrics = crmMetrics(clientLeads);
+    const active = client.name === activeClient ? " is-active" : "";
+    return `
+      <button class="client-chip${active}" data-action="select-crm-client" data-client="${escapeAttr(client.name)}">
+        <strong>${escapeHtml(client.name)}</strong>
+        <span>${metrics.total} contatti · ${metrics.appointments} app. · ${metrics.closed} chiusure</span>
+      </button>
+    `;
+  }).join("");
+}
+
 function filteredCrmLeads() {
+  const clientName = currentCrmClient();
   const search = (els.crmSearch?.value || "").trim().toLowerCase();
   const status = els.crmStatusFilter?.value || "";
   const campaign = els.crmCampaignFilter?.value || "";
   return (state.crmLeads || []).filter((lead) => {
     const haystack = `${lead.name} ${lead.company} ${lead.email} ${lead.phone}`.toLowerCase();
-    return (!search || haystack.includes(search))
+    return lead.client === clientName
+      && (!search || haystack.includes(search))
       && (!status || lead.status === status)
       && (!campaign || lead.campaign === campaign);
   });
@@ -812,11 +851,13 @@ function renderCrmLeadRows(leads) {
 
 function crmStatusOptions() {
   const defaults = ["Da contattare", "Non risposto", "Richiamare", "Qualificato", "Appuntamento fissato", "Rischedulato", "Non presentato", "CONTRATTO FIRMATO", "Scartato", "Non in target", "Numero errato", "ANNULLATO"];
-  return uniqueOptions(defaults, (state.crmLeads || []).map((lead) => lead.status));
+  const clientName = currentCrmClient();
+  return uniqueOptions(defaults, (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => lead.status));
 }
 
 function crmInterestOptions() {
-  return uniqueOptions(["", "Basso", "Medio", "Medio-Alto", "Alto", "Molto Alto", "Da verificare"], (state.crmLeads || []).map((lead) => lead.interest));
+  const clientName = currentCrmClient();
+  return uniqueOptions(["", "Basso", "Medio", "Medio-Alto", "Alto", "Molto Alto", "Da verificare"], (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => lead.interest));
 }
 
 function uniqueOptions(defaults, values) {
@@ -957,7 +998,8 @@ function syncOptions() {
 
 function syncCrmFilters() {
   const statuses = crmStatusOptions();
-  const campaigns = uniqueOptions([], (state.crmLeads || []).map((lead) => lead.campaign));
+  const clientName = currentCrmClient();
+  const campaigns = uniqueOptions([], (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => lead.campaign));
   setOptions(els.crmStatusFilter, ["", ...statuses], ["Tutti", ...statuses]);
   setOptions(els.crmCampaignFilter, ["", ...campaigns], ["Tutte", ...campaigns]);
 }
@@ -1055,6 +1097,10 @@ function commitCellEdit(target, shouldRender = true) {
     (state.creatives || []).forEach((plan) => {
       if (plan.client === previousName) plan.client = nextValue;
     });
+    (state.crmLeads || []).forEach((lead) => {
+      if (lead.client === previousName) lead.client = nextValue;
+    });
+    if (selectedCrmClient === previousName) selectedCrmClient = nextValue;
   }
 
   if (shouldRender) {
@@ -1075,6 +1121,8 @@ function deleteRow(scope, index) {
     state.activities = state.activities.filter((activity) => activity.client !== clientName);
     state.costs = state.costs.filter((cost) => cost.project !== clientName);
     state.creatives = (state.creatives || []).filter((plan) => plan.client !== clientName);
+    state.crmLeads = (state.crmLeads || []).filter((lead) => lead.client !== clientName);
+    if (selectedCrmClient === clientName) selectedCrmClient = "";
   }
   collection.splice(index, 1);
   recordAudit("elimina", scope, { index, name: deleted.name || deleted.client || deleted.task || deleted.period || "" });
@@ -1123,9 +1171,13 @@ function csvRowsToObjects(text) {
 async function importCrmCsv(file) {
   if (!file) return;
   const text = await file.text();
-  const imported = csvRowsToObjects(text).map(normalizeCrmLead);
-  state.crmLeads = imported;
-  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti importati da CSV` });
+  const clientName = currentCrmClient();
+  const imported = csvRowsToObjects(text).map((lead) => normalizeCrmLead({ ...lead, client: clientName }));
+  state.crmLeads = [
+    ...(state.crmLeads || []).filter((lead) => lead.client !== clientName),
+    ...imported,
+  ];
+  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti importati nel CRM ${clientName}` });
   render();
 }
 
@@ -1224,14 +1276,20 @@ handleForm("#salesForm", (data) => {
   return { scope: "sales", details: { name: item.period } };
 });
 
+function activateView(viewId) {
+  const tab = document.querySelector(`.tab[data-view="${viewId}"]`);
+  const view = document.querySelector(`#${viewId}`);
+  if (!tab || !view) return;
+
+  document.querySelectorAll(".tab").forEach((item) => item.classList.remove("is-active"));
+  document.querySelectorAll(".view").forEach((item) => item.classList.remove("is-active"));
+  tab.classList.add("is-active");
+  view.classList.add("is-active");
+  els.viewTitle.textContent = tab.textContent;
+}
+
 document.querySelectorAll(".tab").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("is-active"));
-    document.querySelectorAll(".view").forEach((view) => view.classList.remove("is-active"));
-    button.classList.add("is-active");
-    document.querySelector(`#${button.dataset.view}`).classList.add("is-active");
-    els.viewTitle.textContent = button.textContent;
-  });
+  button.addEventListener("click", () => activateView(button.dataset.view));
 });
 
 document.addEventListener("input", (event) => {
@@ -1247,9 +1305,22 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-action='delete']");
+  const button = event.target.closest("[data-action]");
   if (!button) return;
-  deleteRow(button.dataset.scope, Number(button.dataset.index));
+
+  if (button.dataset.action === "delete") {
+    deleteRow(button.dataset.scope, Number(button.dataset.index));
+    return;
+  }
+
+  if (button.dataset.action === "select-crm-client") {
+    selectedCrmClient = button.dataset.client || "";
+    els.crmSearch.value = "";
+    els.crmStatusFilter.value = "";
+    els.crmCampaignFilter.value = "";
+    activateView("crm");
+    render();
+  }
 });
 
 els.targetMargin.addEventListener("change", () => {

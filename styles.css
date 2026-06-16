@@ -636,6 +636,60 @@ select {
   font-size: 0.86rem;
 }
 
+.crm-client-panel {
+  margin-bottom: 16px;
+}
+
+.client-switcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.client-chip {
+  min-height: 72px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.client-chip:hover,
+.client-chip.is-active {
+  border-color: var(--teal);
+  background: #ecfdfa;
+}
+
+.client-chip strong,
+.client-chip span {
+  display: block;
+}
+
+.client-chip span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.mini-btn {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fafc;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mini-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+}
+
 .timeline {
   display: grid;
   gap: 12px;
