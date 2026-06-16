@@ -664,7 +664,9 @@ function isClosedLead(lead) {
 }
 
 function isAppointmentLead(lead) {
-  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato|qualificato|non convertito/i.test(lead.status || "");
+  return Boolean(lead.appointmentDate)
+    || isClosedLead(lead)
+    || /appuntamento|rischedulato|da rischedulare|qualificato|non convertito|non presentato|annullato/i.test(lead.status || "");
 }
 
 function isDiscardedLead(lead) {
