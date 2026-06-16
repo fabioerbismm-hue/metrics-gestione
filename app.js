@@ -567,7 +567,7 @@ function normalizeCrmLead(lead) {
     area: lead.area || lead["Provincia / Area"] || lead.Area || "",
     profile: lead.profile || lead.Profilo || lead.Ruolo || "",
     interest: lead.interest || lead["Livello interesse"] || lead["Livello Interesse"] || "",
-    status: lead.status || lead.Stato || "Da contattare",
+    status: normalizeCrmStatus(lead.status || lead.Stato || "Da contattare"),
     appointmentDate: lead.appointmentDate || lead["Data appuntamento"] || lead["Data App."] || lead["Appuntamento 2° call"] || "",
     teamsLink: lead.teamsLink || lead["Link Teams"] || lead["link videocall appuntamento"] || lead["Link videocall"] || "",
     emailSent: lead.emailSent || lead["Link inviato via mail"] || lead["Link mandato"] || "",
@@ -582,6 +582,12 @@ function normalizeCrmLead(lead) {
     discardReason: lead.discardReason || lead["Motivo scarto"] || lead["Motivo Scarto"] || "",
     rawLead: lead.rawLead || lead["Lead grezzi"] || "",
   };
+}
+
+function normalizeCrmStatus(value) {
+  const status = String(value || "").trim();
+  if (/^annullato$/i.test(status)) return "Appuntamento non convertito";
+  return status || "Da contattare";
 }
 
 function normalizeCampaignName(value) {
@@ -658,32 +664,25 @@ function isClosedLead(lead) {
 }
 
 function isAppointmentLead(lead) {
-  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato/i.test(lead.status || "");
-}
-
-function isQualifiedLead(lead) {
-  return /qualificato|appuntamento|contratto|firmato/i.test(lead.status || "") || /alto|molto alto|medio-alto/i.test(lead.interest || "");
+  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato|qualificato/i.test(lead.status || "");
 }
 
 function isDiscardedLead(lead) {
-  return /scartato|non in target|numero errato|annullato/i.test(lead.status || "");
+  return /scartato|non in target|numero errato|appuntamento non convertito/i.test(lead.status || "");
 }
 
 function crmMetrics(leads) {
   const total = leads.length;
-  const qualified = leads.filter(isQualifiedLead).length;
   const appointments = leads.filter(isAppointmentLead).length;
   const closed = leads.filter(isClosedLead).length;
   const discarded = leads.filter(isDiscardedLead).length;
   const notAnswered = leads.filter((lead) => /non risposto/i.test(lead.status || "")).length;
   return {
     total,
-    qualified,
     appointments,
     closed,
     discarded,
     notAnswered,
-    qualifiedRate: total ? qualified / total : 0,
     appointmentRate: total ? appointments / total : 0,
     closeRate: total ? closed / total : 0,
   };
@@ -902,7 +901,6 @@ function renderCrm() {
 
   els.crmKpiGrid.innerHTML = [
     ["Contatti", metrics.total, `${allMetrics.total} totali nel CRM`],
-    ["Qualificati", metrics.qualified, pct.format(metrics.qualifiedRate)],
     ["Appuntamenti", metrics.appointments, pct.format(metrics.appointmentRate)],
     ["Chiusure", metrics.closed, pct.format(metrics.closeRate)],
   ].map(([label, value, note]) => `
@@ -1003,7 +1001,6 @@ function renderCrmCampaigns(leads) {
     <tr>
       <td><strong>${escapeHtml(row.campaign)}</strong></td>
       <td>${row.metrics.total}</td>
-      <td>${row.metrics.qualified}</td>
       <td>${row.metrics.appointments}</td>
       <td>${row.metrics.closed}</td>
       <td>${row.metrics.discarded}</td>
@@ -1050,9 +1047,9 @@ function renderCrmLeadRows(leads) {
 }
 
 function crmStatusOptions() {
-  const defaults = ["Da contattare", "Non risposto", "Richiamare", "Qualificato", "Appuntamento fissato", "Rischedulato", "Non presentato", "CONTRATTO FIRMATO", "Scartato", "Non in target", "Numero errato", "ANNULLATO"];
+  const defaults = ["Da contattare", "Non risposto", "Richiamare", "Qualificato", "Appuntamento fissato", "Rischedulato", "Non presentato", "CONTRATTO FIRMATO", "Appuntamento non convertito", "Scartato", "Non in target", "Numero errato"];
   const clientName = currentCrmClient();
-  return uniqueOptions(defaults, (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => lead.status));
+  return uniqueOptions(defaults, (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => normalizeCrmStatus(lead.status)));
 }
 
 function crmInterestOptions() {
@@ -1067,7 +1064,7 @@ function uniqueOptions(defaults, values) {
 function crmStatusKind(status) {
   if (/contratto|firmato/i.test(status || "")) return "good";
   if (/appuntamento|qualificato|rischedulato/i.test(status || "")) return "info";
-  if (/scartato|non in target|errato|annullato/i.test(status || "")) return "bad";
+  if (/scartato|non in target|errato|non convertito/i.test(status || "")) return "bad";
   return "warn";
 }
 
@@ -1309,6 +1306,10 @@ function commitCellEdit(target, shouldRender = true) {
   if (scope === "crmLeads" && field === "campaign") {
     nextValue = normalizeCampaignName(nextValue);
     collection[index].originalCampaign = collection[index].originalCampaign || before;
+    target.value = nextValue;
+  }
+  if (scope === "crmLeads" && field === "status") {
+    nextValue = normalizeCrmStatus(nextValue);
     target.value = nextValue;
   }
 

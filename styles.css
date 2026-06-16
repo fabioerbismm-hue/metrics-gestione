@@ -630,7 +630,7 @@ textarea {
 }
 
 .crm-kpis {
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
 }
 
 .load-list {
