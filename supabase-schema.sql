@@ -65,3 +65,36 @@ on public.metrics_audit_log
 for insert
 to authenticated
 with check (auth.uid() = user_id);
+
+create or replace function public.metrics_add_crm_lead(lead jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if nullif(lead->>'client', '') is null then
+    raise exception 'client is required';
+  end if;
+
+  insert into public.metrics_app_state (id, data, updated_at, updated_by_email)
+  values (
+    'main',
+    jsonb_build_object('crmLeads', jsonb_build_array(lead)),
+    now(),
+    'zapier'
+  )
+  on conflict (id) do update
+  set data = jsonb_set(
+      coalesce(public.metrics_app_state.data, '{}'::jsonb),
+      '{crmLeads}',
+      coalesce(public.metrics_app_state.data->'crmLeads', '[]'::jsonb) || jsonb_build_array(lead),
+      true
+    ),
+    updated_at = now(),
+    updated_by_email = 'zapier';
+end;
+$$;
+
+revoke all on function public.metrics_add_crm_lead(jsonb) from public;
+grant execute on function public.metrics_add_crm_lead(jsonb) to service_role;

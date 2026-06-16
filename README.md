@@ -36,3 +36,42 @@ La versione online richiede login Supabase.
 4. Riesegui `supabase-schema.sql` se hai una versione precedente dello schema.
 
 Il registro modifiche salva email utente, area modificata, azione e dettaglio del cambio.
+
+## Zapier CRM
+
+Per aggiungere contatti da Zapier, riesegui `supabase-schema.sql` e usa una chiamata `POST` verso:
+
+`https://zonutshwipeqitzjlhkq.supabase.co/rest/v1/rpc/metrics_add_crm_lead`
+
+Header consigliati:
+
+- `apikey`: la `service_role key` di Supabase, da tenere solo dentro Zapier.
+- `Authorization`: `Bearer <service_role key>`.
+- `Content-Type`: `application/json`.
+
+Body esempio:
+
+```json
+{
+  "lead": {
+    "client": "Nome cliente",
+    "name": "Mario Rossi",
+    "company": "Azienda SRL",
+    "phone": "+39 333 0000000",
+    "email": "mario@azienda.it",
+    "channel": "Meta Ads",
+    "campaign": "Campagna giugno",
+    "interest": "Medio-Alto",
+    "status": "Da contattare",
+    "followups": [
+      {
+        "date": "2026-06-20",
+        "type": "Chiamata",
+        "outcome": "Da fare",
+        "notes": "Primo contatto"
+      }
+    ],
+    "backofficeNotes": "Arrivato da Zapier"
+  }
+}
+```

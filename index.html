@@ -295,9 +295,33 @@
         <div class="filterbar crm-filterbar">
           <label>Import CSV<input id="crmCsvInput" type="file" accept=".csv,text/csv" /></label>
           <label>Stato<select id="crmStatusFilter"></select></label>
+          <label>Interesse<select id="crmInterestFilter"></select></label>
           <label>Campagna<select id="crmCampaignFilter"></select></label>
+          <label>Follow-up<select id="crmFollowupFilter"></select></label>
           <label>Cerca<input id="crmSearch" placeholder="Nome, azienda, email, telefono" /></label>
         </div>
+        <section class="panel crm-add-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Aggiungi contatto</h2>
+              <span class="muted">Il contatto viene salvato nel CRM del cliente aperto</span>
+            </div>
+          </div>
+          <form id="crmLeadForm" class="form-grid crm-lead-form">
+            <label>Nome<input name="name" required /></label>
+            <label>Azienda<input name="company" /></label>
+            <label>Telefono<input name="phone" /></label>
+            <label>Email<input name="email" type="email" /></label>
+            <label>Canale<input name="channel" placeholder="Meta Ads, LinkedIn, referral..." /></label>
+            <label>Campagna<input name="campaign" /></label>
+            <label>Interesse<select name="interest"><option></option><option>Basso</option><option>Medio</option><option>Medio-Alto</option><option>Alto</option><option>Molto Alto</option><option>Da verificare</option></select></label>
+            <label>Stato<select name="status"><option>Da contattare</option><option>Non risposto</option><option>Richiamare</option><option>Qualificato</option><option>Appuntamento fissato</option><option>CONTRATTO FIRMATO</option><option>Scartato</option></select></label>
+            <label>Appuntamento<input name="appointmentDate" type="date" /></label>
+            <label>Primo follow-up<input name="nextFollowup" type="date" /></label>
+            <label class="span-2">Note<input name="backofficeNotes" /></label>
+            <button class="primary" type="submit">Aggiungi contatto</button>
+          </form>
+        </section>
         <div class="kpi-grid crm-kpis" id="crmKpiGrid"></div>
         <div class="workspace-grid">
           <section class="panel">

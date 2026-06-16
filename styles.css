@@ -429,7 +429,8 @@ tr:last-child td {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 38px;
   padding: 8px 9px;
@@ -437,6 +438,10 @@ select {
   border-radius: 7px;
   background: #fff;
   color: var(--ink);
+}
+
+textarea {
+  resize: vertical;
 }
 
 .cell-input,
@@ -480,6 +485,12 @@ select {
 
 .note-input {
   min-width: 220px;
+}
+
+.followup-input {
+  min-width: 280px;
+  min-height: 72px;
+  line-height: 1.35;
 }
 
 .save-marker {
@@ -575,7 +586,19 @@ select {
 }
 
 .crm-filterbar {
-  grid-template-columns: 0.9fr 0.75fr 1fr 1.2fr;
+  grid-template-columns: 0.85fr 0.75fr 0.75fr 0.9fr 0.75fr 1.2fr;
+}
+
+.crm-add-panel {
+  margin-bottom: 16px;
+}
+
+.crm-lead-form {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.crm-lead-form .span-2 {
+  grid-column: span 2;
 }
 
 .crm-kpis {

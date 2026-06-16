@@ -144,7 +144,9 @@ const els = {
   crmCsvInput: document.querySelector("#crmCsvInput"),
   crmSearch: document.querySelector("#crmSearch"),
   crmStatusFilter: document.querySelector("#crmStatusFilter"),
+  crmInterestFilter: document.querySelector("#crmInterestFilter"),
   crmCampaignFilter: document.querySelector("#crmCampaignFilter"),
+  crmFollowupFilter: document.querySelector("#crmFollowupFilter"),
   auditRows: document.querySelector("#auditRows"),
   loginForm: document.querySelector("#loginForm"),
   loginMessage: document.querySelector("#loginMessage"),
@@ -479,6 +481,7 @@ function normalizeState() {
 }
 
 function normalizeCrmLead(lead) {
+  const followups = normalizeFollowups(lead);
   return {
     client: lead.client || lead.Cliente || selectedCrmClient || state.clients?.[0]?.name || "",
     name: lead.name || lead["Nome e cognome"] || "",
@@ -500,13 +503,63 @@ function normalizeCrmLead(lead) {
     reminderSent: lead.reminderSent || lead["Reminder inviato"] || "",
     whatsappSent: lead.whatsappSent || lead["Comunicato su gruppo WA"] || "",
     backofficeNotes: lead.backofficeNotes || lead["Note Back-Office"] || "",
-    nextFollowup: lead.nextFollowup || lead["Prossimo follow-up"] || "",
+    nextFollowup: lead.nextFollowup || lead["Prossimo follow-up"] || followups[0]?.date || "",
+    followups,
     followupType: lead.followupType || lead["Tipo follow-up"] || "",
     lastOutcome: lead.lastOutcome || lead["Esito ultimo contatto"] || "",
     postCallNotes: lead.postCallNotes || lead["Note post-call"] || "",
     discardReason: lead.discardReason || lead["Motivo scarto"] || "",
     rawLead: lead.rawLead || lead["Lead grezzi"] || "",
   };
+}
+
+function normalizeFollowups(lead) {
+  if (Array.isArray(lead.followups)) {
+    return lead.followups
+      .map((item) => ({
+        date: item.date || "",
+        type: item.type || "",
+        outcome: item.outcome || "",
+        notes: item.notes || "",
+      }))
+      .filter((item) => item.date || item.type || item.outcome || item.notes);
+  }
+
+  if (lead.followupsText) return parseFollowupsText(lead.followupsText);
+
+  const legacy = {
+    date: lead.nextFollowup || lead["Prossimo follow-up"] || "",
+    type: lead.followupType || lead["Tipo follow-up"] || "",
+    outcome: lead.lastOutcome || lead["Esito ultimo contatto"] || "",
+    notes: lead.postCallNotes || lead["Note post-call"] || "",
+  };
+
+  return legacy.date || legacy.type || legacy.outcome || legacy.notes ? [legacy] : [];
+}
+
+function parseFollowupsText(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [date = "", type = "", outcome = "", ...notes] = line.split("|").map((part) => part.trim());
+      return { date, type, outcome, notes: notes.join(" | ") };
+    });
+}
+
+function followupsText(followups) {
+  return (followups || [])
+    .map((item) => [item.date, item.type, item.outcome, item.notes].filter(Boolean).join(" | "))
+    .join("\n");
+}
+
+function nextFollowupDate(lead) {
+  const dates = (lead.followups || [])
+    .map((item) => item.date)
+    .filter(Boolean)
+    .sort();
+  return dates[0] || lead.nextFollowup || "";
 }
 
 function isClosedLead(lead) {
@@ -793,14 +846,30 @@ function filteredCrmLeads() {
   const clientName = currentCrmClient();
   const search = (els.crmSearch?.value || "").trim().toLowerCase();
   const status = els.crmStatusFilter?.value || "";
+  const interest = els.crmInterestFilter?.value || "";
   const campaign = els.crmCampaignFilter?.value || "";
+  const followup = els.crmFollowupFilter?.value || "";
   return (state.crmLeads || []).filter((lead) => {
-    const haystack = `${lead.name} ${lead.company} ${lead.email} ${lead.phone}`.toLowerCase();
+    const haystack = `${lead.name} ${lead.company} ${lead.email} ${lead.phone} ${lead.backofficeNotes}`.toLowerCase();
     return lead.client === clientName
       && (!search || haystack.includes(search))
       && (!status || lead.status === status)
-      && (!campaign || lead.campaign === campaign);
+      && (!interest || lead.interest === interest)
+      && (!campaign || lead.campaign === campaign)
+      && crmFollowupMatches(lead, followup);
   });
+}
+
+function crmFollowupMatches(lead, filter) {
+  if (!filter) return true;
+  const today = new Date().toISOString().slice(0, 10);
+  const dates = (lead.followups || []).map((item) => item.date).filter(Boolean);
+  if (filter === "none") return dates.length === 0;
+  if (filter === "has") return dates.length > 0;
+  if (filter === "overdue") return dates.some((date) => date < today);
+  if (filter === "today") return dates.some((date) => date === today);
+  if (filter === "future") return dates.some((date) => date > today);
+  return true;
 }
 
 function renderCrmCampaigns(leads) {
@@ -841,7 +910,7 @@ function renderCrmLeadRows(leads) {
         <td>${selectHtml("crmLeads", index, "interest", crmInterestOptions(), lead.interest)}</td>
         <td>${selectHtml("crmLeads", index, "status", crmStatusOptions(), lead.status, crmStatusKind(lead.status))}</td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="appointmentDate" value="${escapeAttr(lead.appointmentDate)}" /></td>
-        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="nextFollowup" value="${escapeAttr(lead.nextFollowup)}" /></td>
+        <td><textarea class="cell-input followup-input" data-scope="crmLeads" data-index="${index}" data-field="followupsText">${escapeHtml(followupsText(lead.followups))}</textarea></td>
         <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="backofficeNotes" value="${escapeAttr(lead.backofficeNotes || lead.postCallNotes)}" /></td>
         <td><button class="icon-btn danger" data-action="delete" data-scope="crmLeads" data-index="${index}" title="Elimina lead">x</button></td>
       </tr>
@@ -998,10 +1067,17 @@ function syncOptions() {
 
 function syncCrmFilters() {
   const statuses = crmStatusOptions();
+  const interests = crmInterestOptions().filter(Boolean);
   const clientName = currentCrmClient();
   const campaigns = uniqueOptions([], (state.crmLeads || []).filter((lead) => lead.client === clientName).map((lead) => lead.campaign));
   setOptions(els.crmStatusFilter, ["", ...statuses], ["Tutti", ...statuses]);
+  setOptions(els.crmInterestFilter, ["", ...interests], ["Tutti", ...interests]);
   setOptions(els.crmCampaignFilter, ["", ...campaigns], ["Tutte", ...campaigns]);
+  setOptions(
+    els.crmFollowupFilter,
+    ["", "has", "none", "overdue", "today", "future"],
+    ["Tutti", "Con follow-up", "Senza follow-up", "Scaduti", "Oggi", "Futuri"]
+  );
 }
 
 function setOptions(select, values, labels = values) {
@@ -1060,6 +1136,21 @@ function commitCellEdit(target, shouldRender = true) {
 
   const previousName = scope === "clients" && field === "name" ? collection[index].name : null;
   const before = collection[index][field];
+
+  if (scope === "crmLeads" && field === "followupsText") {
+    const nextFollowups = parseFollowupsText(target.value);
+    collection[index].followups = nextFollowups;
+    collection[index].nextFollowup = nextFollowupDate(collection[index]);
+    if (shouldRender) {
+      recordAudit("modifica", scope, { index, field: "followups", before, after: followupsText(nextFollowups) });
+      render();
+    } else {
+      saveState();
+      showSavedState();
+    }
+    return;
+  }
+
   const numericFields = new Set([
     "monthlyFee",
     "adsBudget",
@@ -1173,12 +1264,28 @@ async function importCrmCsv(file) {
   const text = await file.text();
   const clientName = currentCrmClient();
   const imported = csvRowsToObjects(text).map((lead) => normalizeCrmLead({ ...lead, client: clientName }));
-  state.crmLeads = [
-    ...(state.crmLeads || []).filter((lead) => lead.client !== clientName),
-    ...imported,
-  ];
-  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti importati nel CRM ${clientName}` });
+  const existing = state.crmLeads || [];
+  const merged = [...existing];
+  imported.forEach((lead) => {
+    const duplicateIndex = merged.findIndex((item) => crmLeadKey(item) === crmLeadKey(lead));
+    if (duplicateIndex >= 0) {
+      merged[duplicateIndex] = { ...merged[duplicateIndex], ...lead };
+    } else {
+      merged.push(lead);
+    }
+  });
+  state.crmLeads = merged;
+  recordAudit("importa", "crmLeads", { name: `${imported.length} contatti aggiunti/aggiornati nel CRM ${clientName}` });
   render();
+}
+
+function crmLeadKey(lead) {
+  return [
+    lead.client || "",
+    (lead.email || "").toLowerCase(),
+    (lead.phone || "").replace(/\s+/g, ""),
+    (lead.name || "").toLowerCase(),
+  ].join("|");
 }
 
 function handleForm(id, mapper) {
@@ -1263,6 +1370,20 @@ handleForm("#creativeForm", (data) => {
   return { scope: "creatives", details: { name: `${item.client} - ${item.monthlyGraphicsTarget} grafiche/mese`, client: item.client } };
 });
 
+handleForm("#crmLeadForm", (data) => {
+  const clientName = currentCrmClient();
+  if (!clientName) return null;
+
+  const item = normalizeCrmLead({
+    ...data,
+    client: clientName,
+    followups: data.nextFollowup ? [{ date: data.nextFollowup, type: "Follow-up", outcome: "Da fare", notes: "" }] : [],
+  });
+  state.crmLeads = state.crmLeads || [];
+  state.crmLeads.push(item);
+  return { scope: "crmLeads", details: { name: item.name, client: clientName } };
+});
+
 handleForm("#salesForm", (data) => {
   const item = {
     period: data.period,
@@ -1293,7 +1414,7 @@ document.querySelectorAll(".tab").forEach((button) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.matches("input[data-scope][data-field]")) {
+  if (event.target.matches("input[data-scope][data-field], textarea[data-scope][data-field]")) {
     commitCellEdit(event.target, false);
   }
 });
@@ -1317,7 +1438,9 @@ document.addEventListener("click", (event) => {
     selectedCrmClient = button.dataset.client || "";
     els.crmSearch.value = "";
     els.crmStatusFilter.value = "";
+    els.crmInterestFilter.value = "";
     els.crmCampaignFilter.value = "";
+    els.crmFollowupFilter.value = "";
     activateView("crm");
     render();
   }
@@ -1334,8 +1457,9 @@ els.targetMargin.addEventListener("change", () => {
   input.addEventListener("input", render);
 });
 
-[els.crmSearch, els.crmStatusFilter, els.crmCampaignFilter].forEach((input) => {
+[els.crmSearch, els.crmStatusFilter, els.crmInterestFilter, els.crmCampaignFilter, els.crmFollowupFilter].forEach((input) => {
   input.addEventListener("input", render);
+  input.addEventListener("change", render);
 });
 
 els.crmCsvInput.addEventListener("change", (event) => {
