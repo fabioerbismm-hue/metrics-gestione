@@ -522,36 +522,58 @@ function isAccessBlocked() {
 }
 
 function normalizeCrmLead(lead) {
+  const campaign = normalizeCampaignName(lead.campaign || lead.Campagna || "");
   const followups = normalizeFollowups(lead);
   return {
     client: lead.client || lead.Cliente || selectedCrmClient || state.clients?.[0]?.name || "",
-    name: lead.name || lead["Nome e cognome"] || "",
-    company: lead.company || lead["Ragione sociale"] || "",
+    name: lead.name || lead["Nome e cognome"] || lead.Nome || "",
+    company: lead.company || lead["Ragione sociale"] || lead["Ragione Sociale"] || "",
     phone: lead.phone || lead.Telefono || "",
     email: lead.email || lead.Email || "",
     linkedin: lead.linkedin || lead.LinkedIn || "",
-    website: lead.website || lead["Sito web"] || "",
+    website: lead.website || lead["Sito web"] || lead.Sito || "",
     channel: lead.channel || lead.Canale || "",
-    campaign: lead.campaign || lead.Campagna || "",
+    campaign,
+    originalCampaign: lead.originalCampaign || lead.campaign || lead.Campagna || "",
     entryDate: lead.entryDate || lead["Data ingresso"] || lead["Lead grezzi"] || "",
-    area: lead.area || lead["Provincia / Area"] || "",
-    profile: lead.profile || lead.Profilo || "",
-    interest: lead.interest || lead["Livello interesse"] || "",
+    area: lead.area || lead["Provincia / Area"] || lead.Area || "",
+    profile: lead.profile || lead.Profilo || lead.Ruolo || "",
+    interest: lead.interest || lead["Livello interesse"] || lead["Livello Interesse"] || "",
     status: lead.status || lead.Stato || "Da contattare",
-    appointmentDate: lead.appointmentDate || lead["Data appuntamento"] || "",
-    teamsLink: lead.teamsLink || lead["Link Teams"] || "",
-    emailSent: lead.emailSent || lead["Link inviato via mail"] || "",
-    reminderSent: lead.reminderSent || lead["Reminder inviato"] || "",
-    whatsappSent: lead.whatsappSent || lead["Comunicato su gruppo WA"] || "",
-    backofficeNotes: lead.backofficeNotes || lead["Note Back-Office"] || "",
+    appointmentDate: lead.appointmentDate || lead["Data appuntamento"] || lead["Data App."] || lead["Appuntamento 2° call"] || "",
+    teamsLink: lead.teamsLink || lead["Link Teams"] || lead["link videocall appuntamento"] || lead["Link videocall"] || "",
+    emailSent: lead.emailSent || lead["Link inviato via mail"] || lead["Link mandato"] || "",
+    reminderSent: lead.reminderSent || lead["Reminder inviato"] || lead.Remainder || lead.Reminder || "",
+    whatsappSent: lead.whatsappSent || lead["Comunicato su gruppo WA"] || lead["Comunicato su Wa"] || "",
+    backofficeNotes: lead.backofficeNotes || lead["Note Back-Office"] || lead["Note interne"] || lead["Note partner"] || "",
     nextFollowup: lead.nextFollowup || lead["Prossimo follow-up"] || followups[0]?.date || "",
     followups,
     followupType: lead.followupType || lead["Tipo follow-up"] || "",
     lastOutcome: lead.lastOutcome || lead["Esito ultimo contatto"] || "",
-    postCallNotes: lead.postCallNotes || lead["Note post-call"] || "",
-    discardReason: lead.discardReason || lead["Motivo scarto"] || "",
+    postCallNotes: lead.postCallNotes || lead["Note post-call"] || lead["Note post appuntamento"] || "",
+    discardReason: lead.discardReason || lead["Motivo scarto"] || lead["Motivo Scarto"] || "",
     rawLead: lead.rawLead || lead["Lead grezzi"] || "",
   };
+}
+
+function normalizeCampaignName(value) {
+  const raw = String(value || "").trim().replace(/\s+/g, " ");
+  const comparable = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[–—]/g, "-")
+    .toLowerCase();
+
+  if (comparable.includes("soc") && comparable.includes("ricerca") && comparable.includes("partner")) {
+    return "SOC - Ricerca Partner";
+  }
+  if (comparable.includes("soc") && comparable.includes("partnership") && (comparable.includes("security") || comparable.includes("assessment"))) {
+    return "SOC - Partnership / Security Assessment";
+  }
+  if (comparable.includes("soc") && comparable.includes("partnership")) {
+    return "SOC - Partnership";
+  }
+  return raw;
 }
 
 function normalizeFollowups(lead) {
@@ -572,7 +594,7 @@ function normalizeFollowups(lead) {
     date: lead.nextFollowup || lead["Prossimo follow-up"] || "",
     type: lead.followupType || lead["Tipo follow-up"] || "",
     outcome: lead.lastOutcome || lead["Esito ultimo contatto"] || "",
-    notes: lead.postCallNotes || lead["Note post-call"] || "",
+    notes: lead.postCallNotes || lead["Note post-call"] || lead["Follw-up post call 1"] || lead["Follw-up post call 2"] || lead["Follw-up post call 2 2"] || "",
   };
 
   return legacy.date || legacy.type || legacy.outcome || legacy.notes ? [legacy] : [];
@@ -608,7 +630,7 @@ function isClosedLead(lead) {
 }
 
 function isAppointmentLead(lead) {
-  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato|qualificato/i.test(lead.status || "");
+  return Boolean(lead.appointmentDate) || /appuntamento|rischedulato/i.test(lead.status || "");
 }
 
 function isQualifiedLead(lead) {
@@ -901,7 +923,21 @@ function filteredCrmLeads() {
   const campaign = els.crmCampaignFilter?.value || "";
   const followup = els.crmFollowupFilter?.value || "";
   return (state.crmLeads || []).filter((lead) => {
-    const haystack = `${lead.name} ${lead.company} ${lead.email} ${lead.phone} ${lead.backofficeNotes}`.toLowerCase();
+    const haystack = [
+      lead.name,
+      lead.company,
+      lead.email,
+      lead.phone,
+      lead.linkedin,
+      lead.website,
+      lead.channel,
+      lead.campaign,
+      lead.area,
+      lead.profile,
+      lead.backofficeNotes,
+      lead.postCallNotes,
+      lead.rawLead,
+    ].join(" ").toLowerCase();
     return lead.client === clientName
       && (!search || haystack.includes(search))
       && (!status || lead.status === status)
@@ -956,13 +992,27 @@ function renderCrmLeadRows(leads) {
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="company" value="${escapeAttr(lead.company)}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="phone" value="${escapeAttr(lead.phone)}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="email" value="${escapeAttr(lead.email)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="linkedin" value="${escapeAttr(lead.linkedin)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="website" value="${escapeAttr(lead.website)}" /></td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="channel" value="${escapeAttr(lead.channel)}" /></td>
         <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="campaign" value="${escapeAttr(lead.campaign)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="entryDate" value="${escapeAttr(lead.entryDate)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="area" value="${escapeAttr(lead.area)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="profile" value="${escapeAttr(lead.profile)}" /></td>
         <td>${selectHtml("crmLeads", index, "interest", crmInterestOptions(), lead.interest)}</td>
         <td>${selectHtml("crmLeads", index, "status", crmStatusOptions(), lead.status, crmStatusKind(lead.status))}</td>
         <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="appointmentDate" value="${escapeAttr(lead.appointmentDate)}" /></td>
-        <td><textarea class="cell-input followup-input" data-scope="crmLeads" data-index="${index}" data-field="followupsText">${escapeHtml(followupsText(lead.followups))}</textarea></td>
-        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="backofficeNotes" value="${escapeAttr(lead.backofficeNotes || lead.postCallNotes)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="teamsLink" value="${escapeAttr(lead.teamsLink)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="emailSent" value="${escapeAttr(lead.emailSent)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="reminderSent" value="${escapeAttr(lead.reminderSent)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="whatsappSent" value="${escapeAttr(lead.whatsappSent)}" /></td>
+        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="backofficeNotes" value="${escapeAttr(lead.backofficeNotes)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="nextFollowup" value="${escapeAttr(lead.nextFollowup)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="followupType" value="${escapeAttr(lead.followupType)}" /></td>
+        <td><input class="cell-input medium-input" data-scope="crmLeads" data-index="${index}" data-field="lastOutcome" value="${escapeAttr(lead.lastOutcome)}" /></td>
+        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="postCallNotes" value="${escapeAttr(lead.postCallNotes)}" /></td>
+        <td><input class="cell-input note-input" data-scope="crmLeads" data-index="${index}" data-field="discardReason" value="${escapeAttr(lead.discardReason)}" /></td>
+        <td><textarea class="cell-input raw-lead-input" data-scope="crmLeads" data-index="${index}" data-field="rawLead">${escapeHtml(lead.rawLead)}</textarea></td>
         <td><button class="icon-btn danger" data-action="delete" data-scope="crmLeads" data-index="${index}" title="Elimina lead">x</button></td>
       </tr>
     `;
@@ -1225,7 +1275,12 @@ function commitCellEdit(target, shouldRender = true) {
     "otherCosts",
     "firstContract",
   ]);
-  const nextValue = numericFields.has(field) ? Number(target.value) || 0 : target.value.trim();
+  let nextValue = numericFields.has(field) ? Number(target.value) || 0 : target.value.trim();
+  if (scope === "crmLeads" && field === "campaign") {
+    nextValue = normalizeCampaignName(nextValue);
+    collection[index].originalCampaign = collection[index].originalCampaign || before;
+    target.value = nextValue;
+  }
 
   collection[index][field] = nextValue;
 
@@ -1272,6 +1327,7 @@ function deleteRow(scope, index) {
 }
 
 function parseCsv(text) {
+  const delimiter = detectCsvDelimiter(text);
   const rows = [];
   let row = [];
   let cell = "";
@@ -1285,7 +1341,7 @@ function parseCsv(text) {
       i += 1;
     } else if (char === '"') {
       quoted = !quoted;
-    } else if (char === "," && !quoted) {
+    } else if (char === delimiter && !quoted) {
       row.push(cell);
       cell = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
@@ -1304,21 +1360,44 @@ function parseCsv(text) {
   return rows;
 }
 
+function detectCsvDelimiter(text) {
+  const firstLine = String(text || "").split(/\r?\n/).find((line) => line.trim()) || "";
+  const candidates = [",", ";", "\t"];
+  return candidates
+    .map((delimiter) => ({ delimiter, count: firstLine.split(delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter || ",";
+}
+
 function csvRowsToObjects(text) {
   const rows = parseCsv(text);
-  const headers = rows.shift() || [];
-  return rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] || ""])));
+  const headers = uniqueCsvHeaders((rows.shift() || []).map(cleanCsvHeader));
+  return rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, (row[index] || "").trim()])));
+}
+
+function cleanCsvHeader(header) {
+  return String(header || "").replace(/^\uFEFF/, "").trim();
+}
+
+function uniqueCsvHeaders(headers) {
+  const seen = new Map();
+  return headers.map((header, index) => {
+    const clean = header || `Column ${index + 1}`;
+    const count = seen.get(clean) || 0;
+    seen.set(clean, count + 1);
+    return count ? `${clean} ${count + 1}` : clean;
+  });
 }
 
 async function importCrmCsv(file) {
   if (!file) return;
-  const text = await file.text();
+  const text = await readCsvFile(file);
   const clientName = currentCrmClient();
   const imported = csvRowsToObjects(text).map((lead) => normalizeCrmLead({ ...lead, client: clientName }));
   const existing = state.crmLeads || [];
   const merged = [...existing];
   imported.forEach((lead) => {
-    const duplicateIndex = merged.findIndex((item) => crmLeadKey(item) === crmLeadKey(lead));
+    const key = crmLeadKey(lead);
+    const duplicateIndex = key ? merged.findIndex((item) => crmLeadKey(item) === key) : -1;
     if (duplicateIndex >= 0) {
       merged[duplicateIndex] = { ...merged[duplicateIndex], ...lead };
     } else {
@@ -1326,17 +1405,40 @@ async function importCrmCsv(file) {
     }
   });
   state.crmLeads = merged;
+  resetCrmFilters();
   recordAudit("importa", "crmLeads", { name: `${imported.length} contatti aggiunti/aggiornati nel CRM ${clientName}` });
   render();
 }
 
+async function readCsvFile(file) {
+  const buffer = await file.arrayBuffer();
+  const utf8 = new TextDecoder("utf-8").decode(buffer);
+  if (!/[ÃÂ�]/.test(utf8)) return utf8;
+
+  try {
+    return new TextDecoder("windows-1252").decode(buffer);
+  } catch {
+    return utf8;
+  }
+}
+
 function crmLeadKey(lead) {
-  return [
-    lead.client || "",
-    (lead.email || "").toLowerCase(),
-    (lead.phone || "").replace(/\s+/g, ""),
-    (lead.name || "").toLowerCase(),
-  ].join("|");
+  const email = (lead.email || "").toLowerCase();
+  const phone = (lead.phone || "").replace(/\s+/g, "");
+  const name = (lead.name || "").toLowerCase();
+  const company = (lead.company || "").toLowerCase();
+  if (email) return `${lead.client || ""}|email:${email}`;
+  if (phone) return `${lead.client || ""}|phone:${phone}`;
+  if (name && company) return `${lead.client || ""}|name:${name}|company:${company}`;
+  return "";
+}
+
+function resetCrmFilters() {
+  els.crmSearch.value = "";
+  els.crmStatusFilter.value = "";
+  els.crmInterestFilter.value = "";
+  els.crmCampaignFilter.value = "";
+  els.crmFollowupFilter.value = "";
 }
 
 function handleForm(id, mapper) {

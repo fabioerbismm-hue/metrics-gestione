@@ -119,7 +119,8 @@ body.is-client-portal .brand small::after {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -510,6 +511,12 @@ textarea {
 
 .followup-input {
   min-width: 280px;
+  min-height: 72px;
+  line-height: 1.35;
+}
+
+.raw-lead-input {
+  min-width: 320px;
   min-height: 72px;
   line-height: 1.35;
 }
