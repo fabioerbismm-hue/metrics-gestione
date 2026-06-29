@@ -604,6 +604,14 @@ textarea {
   justify-items: end;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .filterbar {
   grid-template-columns: 1.3fr 0.65fr 0.85fr;
   margin-bottom: 16px;

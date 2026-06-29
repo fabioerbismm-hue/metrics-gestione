@@ -163,6 +163,7 @@ const els = {
   clientCount: document.querySelector("#clientCount"),
   monthlyRows: document.querySelector("#monthlyRows"),
   exportMonthlyCsv: document.querySelector("#exportMonthlyCsv"),
+  exportSheet: document.querySelector("#exportSheet"),
   peopleLoad: document.querySelector("#peopleLoad"),
   settingsPanel: document.querySelector("#settingsPanel"),
   activityRows: document.querySelector("#activityRows"),
@@ -1520,6 +1521,93 @@ function exportMonthlyCsv() {
   downloadCsv("metrics-ricavi-costi-mensili.csv", [headers, ...rows]);
 }
 
+function exportSheet() {
+  const economics = allEconomics();
+  const sections = [
+    {
+      title: "Clienti",
+      headers: ["Cliente", "Stato", "Servizio", "Ricavi mese", "Costi diretti", "Margine", "Mesi attivi", "Totale generato", "Rinnovo"],
+      rows: economics.map((row) => [
+        row.client.name,
+        row.client.status,
+        row.client.service,
+        row.revenue,
+        row.directCosts,
+        row.margin,
+        row.activeMonths,
+        row.totalGenerated,
+        row.client.renewalStatus,
+      ]),
+    },
+    {
+      title: "Ricavi e costi mensili",
+      headers: ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"],
+      rows: (state.monthlyRecords || []).map((record) => [record.month, record.client, record.type, record.item, Number(record.amount) || 0, record.notes]),
+    },
+    {
+      title: "Costi e tool",
+      headers: ["Voce", "Categoria", "Cliente", "Tipo", "Frequenza", "Importo", "Mensilizzato", "Incide sul margine", "Note"],
+      rows: (state.costs || []).map((cost) => [
+        cost.name,
+        cost.category,
+        cost.project,
+        cost.type,
+        cost.frequency,
+        Number(cost.amount) || 0,
+        monthlyAmount(cost),
+        cost.impacts,
+        cost.notes,
+      ]),
+    },
+    {
+      title: "CRM",
+      headers: CRM_REQUIRED_HEADERS,
+      rows: (state.crmLeads || []).map((lead) => [
+        lead.name,
+        lead.company,
+        lead.phone,
+        lead.email,
+        lead.linkedin,
+        lead.website,
+        lead.channel,
+        lead.campaign,
+        lead.entryDate,
+        lead.area,
+        lead.profile,
+        lead.interest,
+        lead.status,
+        lead.appointmentDate,
+        lead.teamsLink,
+        lead.emailSent,
+        lead.reminderSent,
+        lead.whatsappSent,
+        lead.backofficeNotes,
+        lead.nextFollowup,
+        lead.followupType,
+        lead.lastOutcome,
+        lead.postCallNotes,
+        lead.discardReason,
+        lead.rawLead,
+      ]),
+    },
+  ];
+
+  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>${sections.map(sheetSectionHtml).join("<br>")}</body></html>`;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `metrics-sheet-${new Date().toISOString().slice(0, 10)}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function sheetSectionHtml(section) {
+  const header = section.headers.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("");
+  const rows = section.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
+  return `<h2>${escapeHtml(section.title)}</h2><table border="1"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function downloadCsv(filename, rows) {
   const csv = rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -1831,6 +1919,10 @@ document.addEventListener("click", (event) => {
   if (button.dataset.action === "delete-monthly-summary") {
     deleteMonthlySummary(button.dataset.client, button.dataset.month);
   }
+
+  if (button.dataset.action === "export-sheet") {
+    exportSheet();
+  }
 });
 
 document.addEventListener("change", (event) => {
@@ -1885,6 +1977,7 @@ document.querySelector("#exportJson").addEventListener("click", () => {
 });
 
 els.exportMonthlyCsv?.addEventListener("click", exportMonthlyCsv);
+els.exportSheet?.addEventListener("click", exportSheet);
 
 els.loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
