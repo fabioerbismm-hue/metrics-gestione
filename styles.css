@@ -625,8 +625,14 @@ textarea {
   grid-template-columns: repeat(4, minmax(160px, 1fr));
 }
 
-.crm-lead-form .span-2 {
+.crm-lead-form .span-2,
+.monthly-form .span-2 {
   grid-column: span 2;
+}
+
+.monthly-form {
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  margin-bottom: 14px;
 }
 
 .crm-kpis {

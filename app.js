@@ -49,6 +49,10 @@ const baseData = {
       activeMonths: 4,
     },
   ],
+  monthlyRecords: [
+    { client: "Startupdata", month: "2026-06", revenue: 1500, costs: 45, notes: "Baseline da canone e tool cliente" },
+    { client: "Mirko / Evolution", month: "2026-06", revenue: 700, costs: 10.42, notes: "Baseline da canone e quota email" },
+  ],
   activities: [
     ["Startupdata", "Setup iniziale", "Strategia", "Strategia sistema appuntamenti e target", "Fabio", "Fabio", "Alta", "Non delegabile", "Si", "Mensile", 0, 0, 0],
     ["Startupdata", "Setup iniziale", "LinkedIn", "Impostazione automazione richieste collegamento", "Fabio", "Fabio", "Alta", "Non delegabile", "Si", "Mensile", 0, 0, 0],
@@ -155,6 +159,7 @@ const els = {
   dashboardClientRows: document.querySelector("#dashboardClientRows"),
   clientRows: document.querySelector("#clientRows"),
   clientCount: document.querySelector("#clientCount"),
+  monthlyRows: document.querySelector("#monthlyRows"),
   peopleLoad: document.querySelector("#peopleLoad"),
   settingsPanel: document.querySelector("#settingsPanel"),
   activityRows: document.querySelector("#activityRows"),
@@ -443,12 +448,19 @@ function capacityFor(person) {
 }
 
 function clientEconomics(client) {
-  const revenue = Number(client.monthlyFee) + Number(client.monthlyExtra) + Number(client.oneTimeExtra) + Number(client.variable);
-  const activeMonths = Number(client.activeMonths) || 0;
-  const totalGenerated = revenue * activeMonths;
-  const directCosts = state.costs
+  const records = monthlyRecordsFor(client.name);
+  const latestRecord = records[records.length - 1] || null;
+  const legacyRevenue = Number(client.monthlyFee) + Number(client.monthlyExtra) + Number(client.oneTimeExtra) + Number(client.variable);
+  const revenue = latestRecord ? Number(latestRecord.revenue) || 0 : legacyRevenue;
+  const activeMonths = records.length || Number(client.activeMonths) || 0;
+  const totalGenerated = records.length
+    ? records.reduce((sum, record) => sum + (Number(record.revenue) || 0), 0)
+    : revenue * activeMonths;
+  const recurringCosts = state.costs
     .filter((cost) => cost.project === client.name && cost.impacts === "Si")
     .reduce((sum, cost) => sum + monthlyAmount(cost), 0);
+  const monthlyDirectCosts = latestRecord ? Number(latestRecord.costs) || 0 : 0;
+  const directCosts = latestRecord ? monthlyDirectCosts : recurringCosts;
   const activities = state.activities.filter((item) => item.client === client.name);
   const creativePlans = (state.creatives || []).filter((item) => item.client === client.name);
   const activityHours = activities.reduce((sum, item) => sum + hoursFor(item), 0);
@@ -461,7 +473,13 @@ function clientEconomics(client) {
   const target = Number(state.settings.targetMargin) / 100;
   const minimumPrice = target >= 1 ? directCosts + laborValue : (directCosts + laborValue) / Math.max(0.05, 1 - target);
   const alert = alertFor({ client, revenue, marginPct, minimumPrice, hours });
-  return { revenue, activeMonths, totalGenerated, directCosts, hours, laborValue, margin, marginPct, minimumPrice, alert };
+  return { revenue, activeMonths, totalGenerated, directCosts, monthlyDirectCosts, recurringCosts, hours, laborValue, margin, marginPct, minimumPrice, alert };
+}
+
+function monthlyRecordsFor(clientName) {
+  return (state.monthlyRecords || [])
+    .filter((record) => record.client === clientName)
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)));
 }
 
 function alertFor(info) {
@@ -490,6 +508,7 @@ function render() {
   const rows = allEconomics();
   renderKpis(rows);
   renderClients(rows);
+  renderMonthlyRecords();
   renderPeople();
   renderSettings();
   renderActivities();
@@ -514,10 +533,23 @@ function normalizeState() {
   }));
   state.activities = Array.isArray(state.activities) ? state.activities : [];
   state.costs = Array.isArray(state.costs) ? state.costs : [];
+  state.monthlyRecords = Array.isArray(state.monthlyRecords)
+    ? state.monthlyRecords.map(normalizeMonthlyRecord).filter((record) => record.client && record.month)
+    : [];
   state.sales = Array.isArray(state.sales) ? state.sales : [];
   state.crmLeads = Array.isArray(state.crmLeads) ? state.crmLeads.map(normalizeCrmLead) : [];
   state.settings = { ...structuredClone(baseData.settings), ...(state.settings || {}) };
   updateAccessMode();
+}
+
+function normalizeMonthlyRecord(record) {
+  return {
+    client: record.client || "",
+    month: record.month || "",
+    revenue: Number(record.revenue) || 0,
+    costs: Number(record.costs) || 0,
+    notes: record.notes || "",
+  };
 }
 
 function updateAccessMode() {
@@ -732,6 +764,29 @@ function renderClients(rows) {
   els.clientCount.textContent = `${rows.length} clienti`;
   els.dashboardClientRows.innerHTML = rows.map((row) => dashboardClientRow(row)).join("");
   els.clientRows.innerHTML = rows.map((row, index) => clientEditRow(row, index)).join("");
+}
+
+function renderMonthlyRecords() {
+  if (!els.monthlyRows) return;
+  const rows = [...(state.monthlyRecords || [])]
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => String(b.record.month).localeCompare(String(a.record.month)) || String(a.record.client).localeCompare(String(b.record.client)));
+
+  els.monthlyRows.innerHTML = rows.map(({ record, index }) => {
+    const revenue = Number(record.revenue) || 0;
+    const costs = Number(record.costs) || 0;
+    return `
+      <tr>
+        <td><input class="cell-input medium-input" type="month" data-scope="monthlyRecords" data-index="${index}" data-field="month" value="${escapeAttr(record.month)}" /></td>
+        <td>${selectHtml("monthlyRecords", index, "client", state.clients.map((client) => client.name), record.client)}</td>
+        <td><input class="cell-input money-input" type="number" min="0" step="1" data-scope="monthlyRecords" data-index="${index}" data-field="revenue" value="${revenue}" /></td>
+        <td><input class="cell-input money-input" type="number" min="0" step="1" data-scope="monthlyRecords" data-index="${index}" data-field="costs" value="${costs}" /></td>
+        <td>${euro.format(revenue - costs)}</td>
+        <td><input class="cell-input note-input" data-scope="monthlyRecords" data-index="${index}" data-field="notes" value="${escapeAttr(record.notes)}" /></td>
+        <td><button class="icon-btn danger" data-action="delete" data-scope="monthlyRecords" data-index="${index}" title="Elimina mese">x</button></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function dashboardClientRow(row) {
@@ -1133,7 +1188,7 @@ function salesCost(row) {
 
 function renderRenewals(rows) {
   els.renewalRows.innerHTML = rows.map((row) => {
-    const current = Number(row.client.monthlyFee) || 0;
+    const current = Number(row.revenue) || Number(row.client.monthlyFee) || 0;
     const suggested = Math.ceil(row.minimumPrice / 50) * 50;
     const increase = suggested - current;
     const after = row.margin + Math.max(0, increase);
@@ -1186,6 +1241,7 @@ function syncOptions() {
   setOptions(document.querySelector('form#activityForm select[name="client"]'), state.clients.map((client) => client.name));
   setOptions(document.querySelector('form#costForm select[name="project"]'), [...state.clients.map((client) => client.name), "Metrics", "Acquisizione Metrics"]);
   setOptions(document.querySelector('form#creativeForm select[name="client"]'), state.clients.map((client) => client.name));
+  setOptions(document.querySelector('form#monthlyRecordForm select[name="client"]'), state.clients.map((client) => client.name));
   setOptions(document.querySelector('form#creativeForm select[name="owner"]'), state.people);
   setOptions(document.querySelector('form#activityForm select[name="owner"]'), state.people);
   setOptions(document.querySelector('form#activityForm select[name="idealOwner"]'), state.people);
@@ -1193,6 +1249,8 @@ function syncOptions() {
   setOptions(document.querySelector('form#activityForm select[name="frequency"]'), state.frequencies);
   setOptions(els.ownerFilter, ["", ...state.people], ["Tutti", ...state.people]);
   setOptions(els.delegationFilter, ["", ...state.delegations], ["Tutte", ...state.delegations]);
+  const monthInput = document.querySelector('form#monthlyRecordForm input[name="month"]');
+  if (monthInput && !monthInput.value) monthInput.value = new Date().toISOString().slice(0, 7);
 }
 
 function syncCrmFilters() {
@@ -1283,6 +1341,8 @@ function commitCellEdit(target, shouldRender = true) {
 
   const numericFields = new Set([
     "monthlyFee",
+    "revenue",
+    "costs",
     "adsBudget",
     "monthlyExtra",
     "activeMonths",
@@ -1327,6 +1387,9 @@ function commitCellEdit(target, shouldRender = true) {
     (state.creatives || []).forEach((plan) => {
       if (plan.client === previousName) plan.client = nextValue;
     });
+    (state.monthlyRecords || []).forEach((record) => {
+      if (record.client === previousName) record.client = nextValue;
+    });
     (state.crmLeads || []).forEach((lead) => {
       if (lead.client === previousName) lead.client = nextValue;
     });
@@ -1351,6 +1414,7 @@ function deleteRow(scope, index) {
     state.activities = state.activities.filter((activity) => activity.client !== clientName);
     state.costs = state.costs.filter((cost) => cost.project !== clientName);
     state.creatives = (state.creatives || []).filter((plan) => plan.client !== clientName);
+    state.monthlyRecords = (state.monthlyRecords || []).filter((record) => record.client !== clientName);
     state.crmLeads = (state.crmLeads || []).filter((lead) => lead.client !== clientName);
     if (selectedCrmClient === clientName) selectedCrmClient = "";
   }
@@ -1534,6 +1598,24 @@ handleForm("#clientForm", (data) => {
   };
   state.clients.push(item);
   return { scope: "clients", details: { name: item.name } };
+});
+
+handleForm("#monthlyRecordForm", (data) => {
+  const item = normalizeMonthlyRecord({
+    client: data.client,
+    month: data.month,
+    revenue: data.revenue,
+    costs: data.costs,
+    notes: data.notes,
+  });
+  const existingIndex = (state.monthlyRecords || []).findIndex((record) => record.client === item.client && record.month === item.month);
+  state.monthlyRecords = state.monthlyRecords || [];
+  if (existingIndex >= 0) {
+    state.monthlyRecords[existingIndex] = item;
+  } else {
+    state.monthlyRecords.push(item);
+  }
+  return { scope: "monthlyRecords", details: { name: `${item.client} - ${item.month}` } };
 });
 
 handleForm("#activityForm", (data) => {
