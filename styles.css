@@ -631,8 +631,15 @@ textarea {
 }
 
 .monthly-form {
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
   margin-bottom: 14px;
+}
+
+.monthly-detail {
+  min-width: 260px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .crm-kpis {

@@ -50,8 +50,10 @@ const baseData = {
     },
   ],
   monthlyRecords: [
-    { client: "Startupdata", month: "2026-06", revenue: 1500, costs: 45, notes: "Baseline da canone e tool cliente" },
-    { client: "Mirko / Evolution", month: "2026-06", revenue: 700, costs: 10.42, notes: "Baseline da canone e quota email" },
+    { client: "Startupdata", month: "2026-06", type: "Entrata", item: "Canone mensile", amount: 1500, notes: "Baseline" },
+    { client: "Startupdata", month: "2026-06", type: "Costo", item: "Tool LinkedIn", amount: 45, notes: "Tool cliente" },
+    { client: "Mirko / Evolution", month: "2026-06", type: "Entrata", item: "Canone mensile", amount: 700, notes: "Baseline" },
+    { client: "Mirko / Evolution", month: "2026-06", type: "Costo", item: "Quota email", amount: 10.42, notes: "Quota email" },
   ],
   activities: [
     ["Startupdata", "Setup iniziale", "Strategia", "Strategia sistema appuntamenti e target", "Fabio", "Fabio", "Alta", "Non delegabile", "Si", "Mensile", 0, 0, 0],
@@ -160,6 +162,7 @@ const els = {
   clientRows: document.querySelector("#clientRows"),
   clientCount: document.querySelector("#clientCount"),
   monthlyRows: document.querySelector("#monthlyRows"),
+  exportMonthlyCsv: document.querySelector("#exportMonthlyCsv"),
   peopleLoad: document.querySelector("#peopleLoad"),
   settingsPanel: document.querySelector("#settingsPanel"),
   activityRows: document.querySelector("#activityRows"),
@@ -449,18 +452,19 @@ function capacityFor(person) {
 
 function clientEconomics(client) {
   const records = monthlyRecordsFor(client.name);
-  const latestRecord = records[records.length - 1] || null;
+  const monthlySummaries = monthlySummariesFor(client.name);
+  const latestSummary = monthlySummaries[monthlySummaries.length - 1] || null;
   const legacyRevenue = Number(client.monthlyFee) + Number(client.monthlyExtra) + Number(client.oneTimeExtra) + Number(client.variable);
-  const revenue = latestRecord ? Number(latestRecord.revenue) || 0 : legacyRevenue;
-  const activeMonths = records.length || Number(client.activeMonths) || 0;
-  const totalGenerated = records.length
-    ? records.reduce((sum, record) => sum + (Number(record.revenue) || 0), 0)
+  const revenue = latestSummary ? latestSummary.revenue : legacyRevenue;
+  const activeMonths = monthlySummaries.length || Number(client.activeMonths) || 0;
+  const totalGenerated = monthlySummaries.length
+    ? monthlySummaries.reduce((sum, summary) => sum + summary.revenue, 0)
     : revenue * activeMonths;
   const recurringCosts = state.costs
     .filter((cost) => cost.project === client.name && cost.impacts === "Si")
     .reduce((sum, cost) => sum + monthlyAmount(cost), 0);
-  const monthlyDirectCosts = latestRecord ? Number(latestRecord.costs) || 0 : 0;
-  const directCosts = latestRecord ? monthlyDirectCosts : recurringCosts;
+  const monthlyDirectCosts = latestSummary ? latestSummary.costs : 0;
+  const directCosts = latestSummary ? monthlyDirectCosts : recurringCosts;
   const activities = state.activities.filter((item) => item.client === client.name);
   const creativePlans = (state.creatives || []).filter((item) => item.client === client.name);
   const activityHours = activities.reduce((sum, item) => sum + hoursFor(item), 0);
@@ -480,6 +484,25 @@ function monthlyRecordsFor(clientName) {
   return (state.monthlyRecords || [])
     .filter((record) => record.client === clientName)
     .sort((a, b) => String(a.month).localeCompare(String(b.month)));
+}
+
+function monthlySummariesFor(clientName = "") {
+  const groups = new Map();
+  (state.monthlyRecords || [])
+    .filter((record) => !clientName || record.client === clientName)
+    .forEach((record) => {
+      const key = `${record.client}|||${record.month}`;
+      if (!groups.has(key)) {
+        groups.set(key, { client: record.client, month: record.month, revenue: 0, costs: 0, items: [], notes: [] });
+      }
+      const summary = groups.get(key);
+      const amount = Number(record.amount) || 0;
+      if (record.type === "Costo") summary.costs += amount;
+      else summary.revenue += amount;
+      summary.items.push(record);
+      if (record.notes) summary.notes.push(record.notes);
+    });
+  return [...groups.values()].sort((a, b) => String(a.month).localeCompare(String(b.month)) || String(a.client).localeCompare(String(b.client)));
 }
 
 function alertFor(info) {
@@ -534,7 +557,7 @@ function normalizeState() {
   state.activities = Array.isArray(state.activities) ? state.activities : [];
   state.costs = Array.isArray(state.costs) ? state.costs : [];
   state.monthlyRecords = Array.isArray(state.monthlyRecords)
-    ? state.monthlyRecords.map(normalizeMonthlyRecord).filter((record) => record.client && record.month)
+    ? state.monthlyRecords.flatMap(expandMonthlyRecord).map(normalizeMonthlyRecord).filter((record) => record.client && record.month)
     : [];
   state.sales = Array.isArray(state.sales) ? state.sales : [];
   state.crmLeads = Array.isArray(state.crmLeads) ? state.crmLeads.map(normalizeCrmLead) : [];
@@ -546,10 +569,23 @@ function normalizeMonthlyRecord(record) {
   return {
     client: record.client || "",
     month: record.month || "",
-    revenue: Number(record.revenue) || 0,
-    costs: Number(record.costs) || 0,
+    type: record.type === "Costo" ? "Costo" : "Entrata",
+    item: record.item || (record.type === "Costo" ? "Costo" : "Entrata"),
+    amount: Number(record.amount) || 0,
     notes: record.notes || "",
   };
+}
+
+function expandMonthlyRecord(record) {
+  if (record.type || record.amount !== undefined) return [record];
+  const expanded = [];
+  if (Number(record.revenue)) {
+    expanded.push({ client: record.client, month: record.month, type: "Entrata", item: "Ricavi mese", amount: Number(record.revenue), notes: record.notes || "" });
+  }
+  if (Number(record.costs)) {
+    expanded.push({ client: record.client, month: record.month, type: "Costo", item: "Costi diretti mese", amount: Number(record.costs), notes: record.notes || "" });
+  }
+  return expanded.length ? expanded : [record];
 }
 
 function updateAccessMode() {
@@ -768,22 +804,23 @@ function renderClients(rows) {
 
 function renderMonthlyRecords() {
   if (!els.monthlyRows) return;
-  const rows = [...(state.monthlyRecords || [])]
-    .map((record, index) => ({ record, index }))
-    .sort((a, b) => String(b.record.month).localeCompare(String(a.record.month)) || String(a.record.client).localeCompare(String(b.record.client)));
+  const rows = monthlySummariesFor().sort((a, b) => String(b.month).localeCompare(String(a.month)) || String(a.client).localeCompare(String(b.client)));
 
-  els.monthlyRows.innerHTML = rows.map(({ record, index }) => {
-    const revenue = Number(record.revenue) || 0;
-    const costs = Number(record.costs) || 0;
+  els.monthlyRows.innerHTML = rows.map((summary) => {
+    const detail = summary.items.map((item) => {
+      const sign = item.type === "Costo" ? "-" : "+";
+      return `${sign} ${escapeHtml(item.item)} ${euro.format(Number(item.amount) || 0)}`;
+    }).join("<br>");
     return `
       <tr>
-        <td><input class="cell-input medium-input" type="month" data-scope="monthlyRecords" data-index="${index}" data-field="month" value="${escapeAttr(record.month)}" /></td>
-        <td>${selectHtml("monthlyRecords", index, "client", state.clients.map((client) => client.name), record.client)}</td>
-        <td><input class="cell-input money-input" type="number" min="0" step="1" data-scope="monthlyRecords" data-index="${index}" data-field="revenue" value="${revenue}" /></td>
-        <td><input class="cell-input money-input" type="number" min="0" step="1" data-scope="monthlyRecords" data-index="${index}" data-field="costs" value="${costs}" /></td>
-        <td>${euro.format(revenue - costs)}</td>
-        <td><input class="cell-input note-input" data-scope="monthlyRecords" data-index="${index}" data-field="notes" value="${escapeAttr(record.notes)}" /></td>
-        <td><button class="icon-btn danger" data-action="delete" data-scope="monthlyRecords" data-index="${index}" title="Elimina mese">x</button></td>
+        <td>${escapeHtml(summary.month)}</td>
+        <td>${escapeHtml(summary.client)}</td>
+        <td>${euro.format(summary.revenue)}</td>
+        <td>${euro.format(summary.costs)}</td>
+        <td>${euro.format(summary.revenue - summary.costs)}</td>
+        <td class="monthly-detail">${detail}</td>
+        <td>${escapeHtml([...new Set(summary.notes)].join(" | "))}</td>
+        <td><button class="icon-btn danger" data-action="delete-monthly-summary" data-client="${escapeAttr(summary.client)}" data-month="${escapeAttr(summary.month)}" title="Elimina mese">x</button></td>
       </tr>
     `;
   }).join("");
@@ -1341,8 +1378,7 @@ function commitCellEdit(target, shouldRender = true) {
 
   const numericFields = new Set([
     "monthlyFee",
-    "revenue",
-    "costs",
+    "amount",
     "adsBudget",
     "monthlyExtra",
     "activeMonths",
@@ -1464,6 +1500,40 @@ function clearCurrentClientCrm() {
   state.crmLeads = (state.crmLeads || []).filter((lead) => lead.client !== clientName);
   recordAudit("pulisce", "crmLeads", { name: `${count} contatti rimossi`, client: clientName });
   render();
+}
+
+function deleteMonthlySummary(client, month) {
+  const count = (state.monthlyRecords || []).filter((record) => record.client === client && record.month === month).length;
+  if (!count) return;
+  if (!confirm(`Eliminare tutte le ${count} voci di ${client} per ${month}?`)) return;
+  state.monthlyRecords = (state.monthlyRecords || []).filter((record) => record.client !== client || record.month !== month);
+  recordAudit("elimina", "monthlyRecords", { name: `${client} - ${month}`, rows: count });
+  render();
+}
+
+function exportMonthlyCsv() {
+  const headers = ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"];
+  const rows = (state.monthlyRecords || [])
+    .slice()
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)) || String(a.client).localeCompare(String(b.client)))
+    .map((record) => [record.month, record.client, record.type, record.item, Number(record.amount) || 0, record.notes]);
+  downloadCsv("metrics-ricavi-costi-mensili.csv", [headers, ...rows]);
+}
+
+function downloadCsv(filename, rows) {
+  const csv = rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function parseCsv(text) {
@@ -1604,18 +1674,14 @@ handleForm("#monthlyRecordForm", (data) => {
   const item = normalizeMonthlyRecord({
     client: data.client,
     month: data.month,
-    revenue: data.revenue,
-    costs: data.costs,
+    type: data.type,
+    item: data.item,
+    amount: data.amount,
     notes: data.notes,
   });
-  const existingIndex = (state.monthlyRecords || []).findIndex((record) => record.client === item.client && record.month === item.month);
   state.monthlyRecords = state.monthlyRecords || [];
-  if (existingIndex >= 0) {
-    state.monthlyRecords[existingIndex] = item;
-  } else {
-    state.monthlyRecords.push(item);
-  }
-  return { scope: "monthlyRecords", details: { name: `${item.client} - ${item.month}` } };
+  state.monthlyRecords.push(item);
+  return { scope: "monthlyRecords", details: { name: `${item.client} - ${item.month} - ${item.type} - ${item.item}` } };
 });
 
 handleForm("#activityForm", (data) => {
@@ -1761,6 +1827,10 @@ document.addEventListener("click", (event) => {
   if (button.dataset.action === "clear-crm-client") {
     clearCurrentClientCrm();
   }
+
+  if (button.dataset.action === "delete-monthly-summary") {
+    deleteMonthlySummary(button.dataset.client, button.dataset.month);
+  }
 });
 
 document.addEventListener("change", (event) => {
@@ -1813,6 +1883,8 @@ document.querySelector("#exportJson").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+els.exportMonthlyCsv?.addEventListener("click", exportMonthlyCsv);
 
 els.loginForm.addEventListener("submit", (event) => {
   event.preventDefault();

@@ -6,7 +6,7 @@
     <title>Metrics gestione</title>
     <link rel="icon" type="image/png" href="assets/metrics-logo.png" />
     <link rel="apple-touch-icon" href="assets/metrics-logo.png" />
-    <link rel="stylesheet" href="styles.css?v=20260629-monthly" />
+    <link rel="stylesheet" href="styles.css?v=20260629-monthly-lines" />
   </head>
   <body class="is-locked">
     <section id="authScreen" class="auth-screen">
@@ -178,10 +178,12 @@
             <form id="monthlyRecordForm" class="form-grid monthly-form">
               <label>Cliente<select name="client"></select></label>
               <label>Mese<input name="month" type="month" required /></label>
-              <label>Ricavi mese<input name="revenue" type="number" min="0" step="1" value="0" /></label>
-              <label>Costi diretti mese<input name="costs" type="number" min="0" step="1" value="0" /></label>
+              <label>Tipo<select name="type"><option>Entrata</option><option>Costo</option></select></label>
+              <label>Voce<input name="item" placeholder="Canone, ads, tool, consulenza..." required /></label>
+              <label>Importo<input name="amount" type="number" min="0" step="1" value="0" /></label>
               <label class="span-2">Note<input name="notes" /></label>
-              <button class="primary" type="submit">Salva mese</button>
+              <button class="primary" type="submit">Aggiungi voce</button>
+              <button class="ghost" type="button" id="exportMonthlyCsv">Scarica sheet</button>
             </form>
             <div class="table-wrap">
               <table>
@@ -192,6 +194,7 @@
                     <th>Ricavi</th>
                     <th>Costi diretti</th>
                     <th>Margine</th>
+                    <th>Dettaglio voci</th>
                     <th>Note</th>
                     <th></th>
                   </tr>
@@ -545,7 +548,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js?v=20260629-monthly"></script>
-    <script src="app.js?v=20260629-monthly"></script>
+    <script src="config.js?v=20260629-monthly-lines"></script>
+    <script src="app.js?v=20260629-monthly-lines"></script>
   </body>
 </html>
