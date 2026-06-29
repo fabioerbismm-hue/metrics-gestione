@@ -163,7 +163,6 @@ const els = {
   clientCount: document.querySelector("#clientCount"),
   monthlyRows: document.querySelector("#monthlyRows"),
   exportMonthlyCsv: document.querySelector("#exportMonthlyCsv"),
-  exportSheet: document.querySelector("#exportSheet"),
   peopleLoad: document.querySelector("#peopleLoad"),
   settingsPanel: document.querySelector("#settingsPanel"),
   activityRows: document.querySelector("#activityRows"),
@@ -1513,99 +1512,107 @@ function deleteMonthlySummary(client, month) {
 }
 
 function exportMonthlyCsv() {
-  const headers = ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"];
-  const rows = (state.monthlyRecords || [])
+  exportMonthlySheet();
+}
+
+function exportMonthlySheet() {
+  const summaryRows = monthlySummariesFor().map((summary) => [
+    summary.month,
+    summary.client,
+    summary.revenue,
+    summary.costs,
+    summary.revenue - summary.costs,
+    summary.items.map((item) => `${item.type}: ${item.item} ${Number(item.amount) || 0}`).join("\n"),
+    [...new Set(summary.notes)].join(" | "),
+  ]);
+  const detailRows = (state.monthlyRecords || [])
     .slice()
     .sort((a, b) => String(a.month).localeCompare(String(b.month)) || String(a.client).localeCompare(String(b.client)))
     .map((record) => [record.month, record.client, record.type, record.item, Number(record.amount) || 0, record.notes]);
-  downloadCsv("metrics-ricavi-costi-mensili.csv", [headers, ...rows]);
+  exportWorkbook("metrics-ricavi-costi-mensili", [
+    {
+      title: "Riepilogo mensile",
+      headers: ["Mese", "Cliente", "Entrate", "Costi", "Margine", "Dettaglio voci", "Note"],
+      rows: summaryRows,
+      widths: [90, 170, 90, 90, 90, 420, 320],
+    },
+    {
+      title: "Dettaglio voci",
+      headers: ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"],
+      rows: detailRows,
+      widths: [90, 170, 90, 240, 90, 320],
+    },
+  ]);
 }
 
-function exportSheet() {
-  const economics = allEconomics();
-  const sections = [
+function exportCrmSheet() {
+  const clientName = currentCrmClient();
+  const rows = (state.crmLeads || [])
+    .filter((lead) => lead.client === clientName)
+    .map((lead) => [
+      lead.name,
+      lead.company,
+      lead.phone,
+      lead.email,
+      lead.linkedin,
+      lead.website,
+      lead.channel,
+      lead.campaign,
+      lead.entryDate,
+      lead.area,
+      lead.profile,
+      lead.interest,
+      lead.status,
+      lead.appointmentDate,
+      lead.teamsLink,
+      lead.emailSent,
+      lead.reminderSent,
+      lead.whatsappSent,
+      lead.backofficeNotes,
+      lead.nextFollowup,
+      lead.followupType,
+      lead.lastOutcome,
+      lead.postCallNotes,
+      lead.discardReason,
+      lead.rawLead,
+    ]);
+  exportWorkbook(`metrics-crm-${clientName || "contatti"}`, [
     {
-      title: "Clienti",
-      headers: ["Cliente", "Stato", "Servizio", "Ricavi mese", "Costi diretti", "Margine", "Mesi attivi", "Totale generato", "Rinnovo"],
-      rows: economics.map((row) => [
-        row.client.name,
-        row.client.status,
-        row.client.service,
-        row.revenue,
-        row.directCosts,
-        row.margin,
-        row.activeMonths,
-        row.totalGenerated,
-        row.client.renewalStatus,
-      ]),
-    },
-    {
-      title: "Ricavi e costi mensili",
-      headers: ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"],
-      rows: (state.monthlyRecords || []).map((record) => [record.month, record.client, record.type, record.item, Number(record.amount) || 0, record.notes]),
-    },
-    {
-      title: "Costi e tool",
-      headers: ["Voce", "Categoria", "Cliente", "Tipo", "Frequenza", "Importo", "Mensilizzato", "Incide sul margine", "Note"],
-      rows: (state.costs || []).map((cost) => [
-        cost.name,
-        cost.category,
-        cost.project,
-        cost.type,
-        cost.frequency,
-        Number(cost.amount) || 0,
-        monthlyAmount(cost),
-        cost.impacts,
-        cost.notes,
-      ]),
-    },
-    {
-      title: "CRM",
+      title: `CRM ${clientName || ""}`,
       headers: CRM_REQUIRED_HEADERS,
-      rows: (state.crmLeads || []).map((lead) => [
-        lead.name,
-        lead.company,
-        lead.phone,
-        lead.email,
-        lead.linkedin,
-        lead.website,
-        lead.channel,
-        lead.campaign,
-        lead.entryDate,
-        lead.area,
-        lead.profile,
-        lead.interest,
-        lead.status,
-        lead.appointmentDate,
-        lead.teamsLink,
-        lead.emailSent,
-        lead.reminderSent,
-        lead.whatsappSent,
-        lead.backofficeNotes,
-        lead.nextFollowup,
-        lead.followupType,
-        lead.lastOutcome,
-        lead.postCallNotes,
-        lead.discardReason,
-        lead.rawLead,
-      ]),
+      rows,
+      widths: [180, 220, 120, 220, 240, 220, 120, 220, 110, 160, 220, 120, 150, 130, 220, 160, 130, 170, 420, 130, 150, 180, 360, 240, 320],
     },
-  ];
+  ]);
+}
 
-  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>${sections.map(sheetSectionHtml).join("<br>")}</body></html>`;
+function exportWorkbook(filename, sections) {
+  const html = `<!doctype html><html><head><meta charset="utf-8" />${sheetStyles()}</head><body>${sections.map(sheetSectionHtml).join("<br>")}</body></html>`;
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `metrics-sheet-${new Date().toISOString().slice(0, 10)}.xls`;
+  a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.xls`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 function sheetSectionHtml(section) {
+  const colgroup = (section.widths || []).map((width) => `<col style="width:${Number(width) || 140}px">`).join("");
   const header = section.headers.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("");
   const rows = section.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
-  return `<h2>${escapeHtml(section.title)}</h2><table border="1"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+  return `<h2>${escapeHtml(section.title)}</h2><table><colgroup>${colgroup}</colgroup><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function sheetStyles() {
+  return `<style>
+    body { font-family: Arial, sans-serif; color: #18202a; }
+    h2 { margin: 18px 0 8px; }
+    table { border-collapse: collapse; table-layout: fixed; margin-bottom: 22px; }
+    th, td { border: 1px solid #cfd8df; padding: 8px; vertical-align: top; white-space: normal; mso-data-placement: same-cell; }
+    th { background: #eaf1f4; font-weight: 700; }
+    td { mso-number-format: "\\@"; }
+  </style>`;
 }
 
 function downloadCsv(filename, rows) {
@@ -1920,8 +1927,12 @@ document.addEventListener("click", (event) => {
     deleteMonthlySummary(button.dataset.client, button.dataset.month);
   }
 
-  if (button.dataset.action === "export-sheet") {
-    exportSheet();
+  if (button.dataset.action === "export-monthly-sheet") {
+    exportMonthlySheet();
+  }
+
+  if (button.dataset.action === "export-crm-sheet") {
+    exportCrmSheet();
   }
 });
 
@@ -1977,7 +1988,6 @@ document.querySelector("#exportJson").addEventListener("click", () => {
 });
 
 els.exportMonthlyCsv?.addEventListener("click", exportMonthlyCsv);
-els.exportSheet?.addEventListener("click", exportSheet);
 
 els.loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
