@@ -1527,7 +1527,7 @@ function exportMonthlySheet() {
     summary.revenue,
     summary.costs,
     summary.revenue - summary.costs,
-    summary.items.map((item) => `${item.type}: ${item.item} ${Number(item.amount) || 0}`).join("\n"),
+    summary.items.map((item) => `${item.type}: ${item.item} - ${formatSheetMoney(item.amount)}`).join("\n"),
     [...new Set(summary.notes)].join(" | "),
   ]);
   const detailRows = (state.monthlyRecords || [])
@@ -1539,13 +1539,15 @@ function exportMonthlySheet() {
       title: "Riepilogo mensile",
       headers: ["Mese", "Cliente", "Entrate", "Costi", "Margine", "Dettaglio voci", "Note"],
       rows: summaryRows,
-      widths: [90, 170, 90, 90, 90, 420, 320],
+      widths: [82, 180, 95, 95, 95, 460, 340],
+      columnTypes: ["text", "text", "currency", "currency", "currency", "longText", "longText"],
     },
     {
       title: "Dettaglio voci",
       headers: ["Mese", "Cliente", "Tipo", "Voce", "Importo", "Note"],
       rows: detailRows,
-      widths: [90, 170, 90, 240, 90, 320],
+      widths: [82, 180, 90, 300, 95, 340],
+      columnTypes: ["text", "text", "text", "longText", "currency", "longText"],
     },
   ]);
 }
@@ -1587,13 +1589,56 @@ function exportCrmSheet() {
       headers: CRM_REQUIRED_HEADERS,
       rows,
       widths: [180, 220, 120, 220, 240, 220, 120, 220, 110, 160, 220, 120, 150, 130, 220, 160, 130, 170, 420, 130, 150, 180, 360, 240, 320],
+      columnTypes: CRM_REQUIRED_HEADERS.map(() => "text"),
     },
   ]);
 }
 
 function exportWorkbook(filename, sections) {
-  const html = `<!doctype html><html><head><meta charset="utf-8" />${sheetStyles()}</head><body>${sections.map(sheetSectionHtml).join("<br>")}</body></html>`;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Vertical="Top" ss:WrapText="1"/>
+      <Font ss:FontName="Arial" ss:Size="10" ss:Color="#18202A"/>
+    </Style>
+    <Style ss:ID="Title">
+      <Alignment ss:Vertical="Center"/>
+      <Font ss:FontName="Arial" ss:Size="14" ss:Bold="1" ss:Color="#0F1720"/>
+    </Style>
+    <Style ss:ID="Header">
+      <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+      <Borders>${excelBorders()}</Borders>
+      <Font ss:FontName="Arial" ss:Size="10" ss:Bold="1" ss:Color="#102033"/>
+      <Interior ss:Color="#EAF1F4" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="Text">
+      <Alignment ss:Vertical="Top" ss:WrapText="1"/>
+      <Borders>${excelBorders()}</Borders>
+    </Style>
+    <Style ss:ID="LongText">
+      <Alignment ss:Vertical="Top" ss:WrapText="1"/>
+      <Borders>${excelBorders()}</Borders>
+    </Style>
+    <Style ss:ID="Currency">
+      <Alignment ss:Horizontal="Right" ss:Vertical="Top"/>
+      <Borders>${excelBorders()}</Borders>
+      <NumberFormat ss:Format="#,##0.00 &quot;€&quot;"/>
+    </Style>
+    <Style ss:ID="Number">
+      <Alignment ss:Horizontal="Right" ss:Vertical="Top"/>
+      <Borders>${excelBorders()}</Borders>
+      <NumberFormat ss:Format="#,##0.00"/>
+    </Style>
+  </Styles>
+  ${sections.map(excelWorksheetXml).join("")}
+</Workbook>`;
+  const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1602,22 +1647,53 @@ function exportWorkbook(filename, sections) {
   URL.revokeObjectURL(url);
 }
 
-function sheetSectionHtml(section) {
-  const colgroup = (section.widths || []).map((width) => `<col style="width:${Number(width) || 140}px">`).join("");
-  const header = section.headers.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("");
-  const rows = section.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
-  return `<h2>${escapeHtml(section.title)}</h2><table><colgroup>${colgroup}</colgroup><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+function excelWorksheetXml(section) {
+  const headers = section.headers || [];
+  const columnTypes = section.columnTypes || headers.map(() => "text");
+  const columns = headers.map((_, index) => `<Column ss:Width="${Number(section.widths?.[index]) || 140}"/>`).join("");
+  const titleMerge = Math.max(headers.length - 1, 0);
+  const title = `<Row ss:Height="28"><Cell ss:MergeAcross="${titleMerge}" ss:StyleID="Title"><Data ss:Type="String">${escapeXml(section.title)}</Data></Cell></Row>`;
+  const spacer = `<Row ss:Height="6"/>`;
+  const header = `<Row ss:Height="30">${headers.map((cell) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(cell)}</Data></Cell>`).join("")}</Row>`;
+  const rows = (section.rows || []).map((row) => {
+    const cells = headers.map((_, index) => excelCellXml(row[index], columnTypes[index]));
+    return `<Row>${cells.join("")}</Row>`;
+  }).join("");
+  return `<Worksheet ss:Name="${escapeXml(worksheetName(section.title))}"><Table>${columns}${title}${spacer}${header}${rows}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>3</SplitHorizontal><TopRowBottomPane>3</TopRowBottomPane><ActivePane>2</ActivePane></WorksheetOptions></Worksheet>`;
 }
 
-function sheetStyles() {
-  return `<style>
-    body { font-family: Arial, sans-serif; color: #18202a; }
-    h2 { margin: 18px 0 8px; }
-    table { border-collapse: collapse; table-layout: fixed; margin-bottom: 22px; }
-    th, td { border: 1px solid #cfd8df; padding: 8px; vertical-align: top; white-space: normal; mso-data-placement: same-cell; }
-    th { background: #eaf1f4; font-weight: 700; }
-    td { mso-number-format: "\\@"; }
-  </style>`;
+function excelCellXml(value, type = "text") {
+  if (type === "currency" || type === "number") {
+    const amount = Number(value) || 0;
+    const style = type === "currency" ? "Currency" : "Number";
+    return `<Cell ss:StyleID="${style}"><Data ss:Type="Number">${amount}</Data></Cell>`;
+  }
+  const style = type === "longText" ? "LongText" : "Text";
+  return `<Cell ss:StyleID="${style}"><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`;
+}
+
+function excelBorders() {
+  return `<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CFD8DF"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CFD8DF"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CFD8DF"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CFD8DF"/>`;
+}
+
+function worksheetName(value) {
+  return String(value || "Foglio").replace(/[:\\/?*\[\]]/g, " ").slice(0, 31) || "Foglio";
+}
+
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function formatSheetMoney(value) {
+  return `${decimal.format(Number(value) || 0)} euro`;
 }
 
 function downloadCsv(filename, rows) {
