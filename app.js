@@ -589,11 +589,16 @@ function expandMonthlyRecord(record) {
 }
 
 function updateAccessMode() {
-  const email = (remoteStore.user?.email || "").toLowerCase();
+  const email = (remoteStore.user?.email || "").trim().toLowerCase();
+  const userId = remoteStore.user?.id || "";
   const adminEmails = new Set(["fabio.erbi.smm@gmail.com", "info@fabiofregoni.com"]);
+  const adminUserIds = new Set([
+    "705601d3-0829-4b3b-b0d4-8e2df3d2afe8",
+    "54fa8bca-254a-433d-b645-136ef4b088c6",
+  ]);
   const portalClient = state.clients.find((client) => (client.portalEmail || "").toLowerCase() === email);
 
-  if (!email || adminEmails.has(email)) {
+  if (!email || adminEmails.has(email) || adminUserIds.has(userId)) {
     currentAccess = { role: "admin", clientName: "" };
   } else if (portalClient) {
     currentAccess = { role: "client", clientName: portalClient.name };
